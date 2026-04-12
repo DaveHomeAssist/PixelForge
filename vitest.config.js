@@ -4,7 +4,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "jsdom",
-    setupFiles: "./src/__tests__/setup.js",
+    setupFiles: ["./src/__tests__/jest-shim.js", "./src/__tests__/setup.js"],
     fileParallelism: false,
     pool: "forks",
     poolOptions: {

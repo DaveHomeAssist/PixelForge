@@ -15,8 +15,12 @@ function loadPrefs() {
   }
 }
 
-function sameList(a = [], b = []) {
-  return a.length === b.length && a.every((value, index) => value === b[index]);
+function persistPrefs(prefs) {
+  try {
+    window.localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+  } catch {
+    // Ignore storage failures; local preferences are optional.
+  }
 }
 
 export default function useEditorPrefs({
@@ -41,28 +45,33 @@ export default function useEditorPrefs({
   setMobilePanelTab,
 }) {
   const [prefs, setPrefs] = useState(loadPrefs);
-  const initialPrefsRef = useRef(prefs);
   const hydratedRef = useRef(false);
+  const latestPrefsRef = useRef(prefs);
 
   const updatePrefs = useCallback((updater) => {
-    setPrefs(prev => updater(prev));
+    setPrefs(prev => {
+      const next = updater(prev);
+      latestPrefsRef.current = next;
+      return next;
+    });
   }, []);
 
+  // Hydrate editor state from stored prefs on mount
   useEffect(() => {
-    const initialPrefs = initialPrefsRef.current;
-    setBrushSize(initialPrefs.toolPrefs.brushSize || 10);
-    setBrushOpacity(initialPrefs.toolPrefs.brushOpacity ?? 1);
-    setStrokeW(initialPrefs.toolPrefs.strokeWidth || 2);
-    setFillOn(initialPrefs.toolPrefs.fillOn ?? true);
-    setStrokeOn(initialPrefs.toolPrefs.strokeOn ?? true);
-    setColor1(initialPrefs.toolPrefs.recentColors?.[0] || DEFAULT_PRIMARY);
-    setColor2(initialPrefs.toolPrefs.recentColors?.[1] || DEFAULT_SECONDARY);
-    setDocForm(initialPrefs.docPrefs.lastNewDoc || { width: DEFAULT_W, height: DEFAULT_H, background: DEFAULT_BG });
+    const p = latestPrefsRef.current;
+    setBrushSize(p.toolPrefs.brushSize || 10);
+    setBrushOpacity(p.toolPrefs.brushOpacity ?? 1);
+    setStrokeW(p.toolPrefs.strokeWidth || 2);
+    setFillOn(p.toolPrefs.fillOn ?? true);
+    setStrokeOn(p.toolPrefs.strokeOn ?? true);
+    setColor1(p.toolPrefs.recentColors?.[0] || DEFAULT_PRIMARY);
+    setColor2(p.toolPrefs.recentColors?.[1] || DEFAULT_SECONDARY);
+    setDocForm(p.docPrefs.lastNewDoc || { width: DEFAULT_W, height: DEFAULT_H, background: DEFAULT_BG });
     setResizeForm(prev => ({
       ...prev,
-      anchor: initialPrefs.docPrefs.lastResizeAnchor || "center",
+      anchor: p.docPrefs.lastResizeAnchor || "center",
     }));
-    setMobilePanelTab(initialPrefs.uiPrefs.mobileTab || "next");
+    setMobilePanelTab(p.uiPrefs.mobileTab || "next");
     hydratedRef.current = true;
   }, [
     setBrushOpacity,
@@ -77,81 +86,71 @@ export default function useEditorPrefs({
     setStrokeW,
   ]);
 
+  // Persist prefs state to localStorage whenever it changes
   useEffect(() => {
     if (!hydratedRef.current) return;
-    try {
-      window.localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
-    } catch {
-      // Ignore storage failures; local preferences are optional.
-    }
+    persistPrefs(prefs);
   }, [prefs]);
 
+  // Sync editor values back to prefs — derived computation, not setState in effect.
+  // Uses a ref to track previous values and only calls updatePrefs when needed.
+  const prevSyncRef = useRef({});
   useEffect(() => {
     if (!hydratedRef.current) return;
-    setPrefs(prev => {
-      const toolPrefs = prev.toolPrefs;
-      if (
-        toolPrefs.brushSize === brushSize &&
-        toolPrefs.brushOpacity === brushOpacity &&
-        toolPrefs.strokeWidth === strokeW &&
-        toolPrefs.fillOn === fillOn &&
-        toolPrefs.strokeOn === strokeOn
-      ) {
-        return prev;
-      }
-      return mergePrefs(prev, {
-        toolPrefs: {
-          brushSize,
-          brushOpacity,
-          strokeWidth: strokeW,
-          fillOn,
-          strokeOn,
-        },
-      });
-    });
-  }, [brushOpacity, brushSize, fillOn, strokeOn, strokeW]);
+    const prev = prevSyncRef.current;
+    const changed =
+      prev.brushSize !== brushSize ||
+      prev.brushOpacity !== brushOpacity ||
+      prev.strokeW !== strokeW ||
+      prev.fillOn !== fillOn ||
+      prev.strokeOn !== strokeOn ||
+      prev.color1 !== color1 ||
+      prev.color2 !== color2 ||
+      prev.tool !== tool ||
+      prev.brushSizeTool !== (["brush", "eraser"].includes(tool) ? brushSize : prev.brushSizeTool) ||
+      prev.mobilePanelTab !== mobilePanelTab;
 
-  useEffect(() => {
-    if (!hydratedRef.current) return;
-    setPrefs(prev => {
+    if (!changed) return;
+
+    prevSyncRef.current = { brushSize, brushOpacity, strokeW, fillOn, strokeOn, color1, color2, tool, mobilePanelTab, brushSizeTool: brushSize };
+
+    updatePrefs(current => {
+      let next = current;
+      // Tool prefs
+      if (
+        current.toolPrefs.brushSize !== brushSize ||
+        current.toolPrefs.brushOpacity !== brushOpacity ||
+        current.toolPrefs.strokeWidth !== strokeW ||
+        current.toolPrefs.fillOn !== fillOn ||
+        current.toolPrefs.strokeOn !== strokeOn
+      ) {
+        next = mergePrefs(next, {
+          toolPrefs: { brushSize, brushOpacity, strokeWidth: strokeW, fillOn, strokeOn },
+        });
+      }
+      // Recent colors
       const nextRecentColors = pushRecentValue(
-        pushRecentValue(prev.toolPrefs.recentColors, color1, RECENT_COLORS_LIMIT),
+        pushRecentValue(current.toolPrefs.recentColors, color1, RECENT_COLORS_LIMIT),
         color2,
         RECENT_COLORS_LIMIT,
       );
-      if (sameList(prev.toolPrefs.recentColors, nextRecentColors)) return prev;
-      return mergePrefs(prev, {
-        toolPrefs: {
-          recentColors: nextRecentColors,
-        },
-      });
+      if (JSON.stringify(current.toolPrefs.recentColors) !== JSON.stringify(nextRecentColors)) {
+        next = mergePrefs(next, { toolPrefs: { recentColors: nextRecentColors } });
+      }
+      // Recent brush sizes (only when brush/eraser active)
+      if (["brush", "eraser"].includes(tool)) {
+        const nextRecentSizes = pushRecentValue(current.toolPrefs.recentBrushSizes, brushSize, RECENT_SIZES_LIMIT);
+        if (JSON.stringify(current.toolPrefs.recentBrushSizes) !== JSON.stringify(nextRecentSizes)) {
+          next = mergePrefs(next, { toolPrefs: { recentBrushSizes: nextRecentSizes } });
+        }
+      }
+      // Mobile tab
+      if (current.uiPrefs.mobileTab !== mobilePanelTab) {
+        next = mergePrefs(next, { uiPrefs: { mobileTab: mobilePanelTab } });
+      }
+      return next;
     });
-  }, [color1, color2]);
-
-  useEffect(() => {
-    if (!hydratedRef.current) return;
-    if (!["brush", "eraser"].includes(tool)) return;
-    setPrefs(prev => {
-      const nextRecentSizes = pushRecentValue(prev.toolPrefs.recentBrushSizes, brushSize, RECENT_SIZES_LIMIT);
-      if (sameList(prev.toolPrefs.recentBrushSizes, nextRecentSizes)) return prev;
-      return mergePrefs(prev, {
-        toolPrefs: {
-          recentBrushSizes: nextRecentSizes,
-        },
-      });
-    });
-  }, [brushSize, tool]);
-
-  useEffect(() => {
-    if (!hydratedRef.current) return;
-    setPrefs(prev => (
-      prev.uiPrefs.mobileTab === mobilePanelTab
-        ? prev
-        : mergePrefs(prev, {
-          uiPrefs: { mobileTab: mobilePanelTab },
-        })
-    ));
-  }, [mobilePanelTab]);
+  }, [brushOpacity, brushSize, color1, color2, fillOn, mobilePanelTab, strokeOn, strokeW, tool, updatePrefs]);
 
   return {
     prefs,

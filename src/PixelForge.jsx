@@ -703,6 +703,29 @@ export default function PixelForge() {
       y: shape.y + 12,
     };
   }
+
+  function duplicateSelectedShape() {
+    const record = findShapeRecord();
+    if (!record || !canEditLayer(record.layer, "duplicate this shape")) return;
+    const before = capturePatchSnapshot([record.layer.id], true);
+    const nextShape = duplicateShape(record.shape);
+    record.layer.shapes.push(nextShape);
+    const nextSelection = { layerId: record.layer.id, shapeId: nextShape.id };
+    setSelectedShape(nextSelection);
+    commitPatchHistory(before, [record.layer.id], { selectedShape: nextSelection });
+    triggerFeedback("shape-duplicate", "success");
+  }
+
+  function deleteSelectedShape() {
+    const record = findShapeRecord();
+    if (!record || !canEditLayer(record.layer, "delete this shape")) return;
+    const before = capturePatchSnapshot([record.layer.id], true);
+    record.layer.shapes.splice(record.index, 1);
+    setSelectedShape(null);
+    commitPatchHistory(before, [record.layer.id], { selectedShape: null });
+    triggerFeedback("shape-delete", "success");
+  }
+
   /* ─── Keyboard ─── */
   useEffect(() => {
     const kd = (e) => {
@@ -734,28 +757,6 @@ export default function PixelForge() {
     window.addEventListener("keydown", kd); window.addEventListener("keyup", ku);
     return () => { window.removeEventListener("keydown", kd); window.removeEventListener("keyup", ku); };
   }, [clearSelection, deleteSelectedShape, duplicateActiveLayer, duplicateSelectedShape, handleSave, selectedShape, swapColors]);
-
-  function duplicateSelectedShape() {
-    const record = findShapeRecord();
-    if (!record || !canEditLayer(record.layer, "duplicate this shape")) return;
-    const before = capturePatchSnapshot([record.layer.id], true);
-    const nextShape = duplicateShape(record.shape);
-    record.layer.shapes.push(nextShape);
-    const nextSelection = { layerId: record.layer.id, shapeId: nextShape.id };
-    setSelectedShape(nextSelection);
-    commitPatchHistory(before, [record.layer.id], { selectedShape: nextSelection });
-    triggerFeedback("shape-duplicate", "success");
-  }
-
-  function deleteSelectedShape() {
-    const record = findShapeRecord();
-    if (!record || !canEditLayer(record.layer, "delete this shape")) return;
-    const before = capturePatchSnapshot([record.layer.id], true);
-    record.layer.shapes.splice(record.index, 1);
-    setSelectedShape(null);
-    commitPatchHistory(before, [record.layer.id], { selectedShape: null });
-    triggerFeedback("shape-delete", "success");
-  }
 
   function commitActiveLayerName() {
     if (!activeId) return;
