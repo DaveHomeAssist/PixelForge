@@ -32,7 +32,7 @@ export function ensureShape(shape) {
 }
 
 export function cloneShape(shape) {
-  return JSON.parse(JSON.stringify(ensureShape(shape)));
+  return structuredClone(ensureShape(shape));
 }
 
 export function cloneShapes(shapes) {

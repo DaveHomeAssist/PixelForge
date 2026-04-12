@@ -1,2 +1,2 @@
 import "fake-indexeddb/auto";
-import "jest-canvas-mock";
+import "vitest-canvas-mock";

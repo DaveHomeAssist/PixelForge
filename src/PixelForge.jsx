@@ -855,6 +855,7 @@ export default function PixelForge() {
   }, { vectorShapes: 0, editedRasterLayers: 0 });
   const isBlankDocument = docSignals.vectorShapes === 0 && docSignals.editedRasterLayers === 0;
   const hasArtwork = !isBlankDocument;
+  /* eslint-disable react-hooks/refs -- refs are only read inside onClick callbacks, not during render */
   const nextActions = [];
   if (suggestedLayer) {
     nextActions.push({
@@ -960,6 +961,7 @@ export default function PixelForge() {
       },
     );
   }
+  /* eslint-enable react-hooks/refs */
   const visibleNextActions = nextActions.slice(0, 3);
   const cursorStyle = isPanning
     ? "grabbing"
