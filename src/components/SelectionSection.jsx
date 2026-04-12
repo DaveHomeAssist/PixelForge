@@ -1,5 +1,5 @@
 export default function SelectionSection({
-  selectedShapeRecord,
+  selectedShapeType,
   selectedShapeFields,
   beginSelectionFieldEdit,
   handleSelectionFieldInput,
@@ -8,7 +8,7 @@ export default function SelectionSection({
   deleteSelectedShape,
   feedbackClass,
 }) {
-  const isLine = selectedShapeRecord.shape.type === "line";
+  const isLine = selectedShapeType === "line";
   const makeInput = (field, label) => (
     <input
       className="pf-input"

@@ -46,6 +46,7 @@ export default function useCanvasInteractions({
   fillOn,
   strokeOn,
   strokeW,
+  color2,
   getLayer,
   findShapeRecord,
   clearSelection,

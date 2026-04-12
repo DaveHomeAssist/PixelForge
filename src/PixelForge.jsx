@@ -73,7 +73,11 @@ export default function PixelForge() {
   const [hoverToolId, setHoverToolId] = useState(null);
   const [saveHandle, setSaveHandle] = useState(null);
   const [selectionDraft, setSelectionDraft] = useState(null);
+  const [selectedShapeType, setSelectedShapeType] = useState(null);
   const [opacityDraft, setOpacityDraft] = useState(null);
+  const [hoverHandle, setHoverHandle] = useState(null);
+  const [isPanning, setIsPanning] = useState(false);
+  const [isSpaceHeld, setIsSpaceHeld] = useState(false);
 
   /* ─── Refs ─── */
   const cvRef = useRef(null);
@@ -126,7 +130,12 @@ export default function PixelForge() {
     const d = doc.current;
     setLayers(d.order.map(id => {
       const l = d.layers[id];
-      return { id: l.id, name: l.name, type: l.type, visible: l.visible, opacity: l.opacity, blend: l.blend, locked: l.locked };
+      return {
+        id: l.id, name: l.name, type: l.type, visible: l.visible,
+        opacity: l.opacity, blend: l.blend, locked: l.locked,
+        contentHint: l.type === "raster" ? (l.contentHint || "edited") : undefined,
+        shapeCount: l.type === "vector" ? l.shapes.length : 0,
+      };
     }));
   }, []);
 
@@ -376,6 +385,7 @@ export default function PixelForge() {
     brushSize,
     brushOpacity,
     color1,
+    color2,
     fillOn,
     strokeOn,
     strokeW,
@@ -405,10 +415,12 @@ export default function PixelForge() {
   useEffect(() => {
     if (!selectedShape) {
       setSelectionDraft(null);
+      setSelectedShapeType(null);
       return;
     }
     const record = findShapeRecord();
     setSelectionDraft(shapeToDraft(record?.shape));
+    setSelectedShapeType(record?.shape?.type || null);
   }, [findShapeRecord, selectedShape, shapeToDraft]);
   useEffect(() => {
     const current = layers.find(layer => layer.id === activeId);
@@ -418,6 +430,17 @@ export default function PixelForge() {
   useEffect(() => () => window.clearTimeout(intentLayerTimer.current), []);
   useEffect(() => () => window.clearTimeout(feedbackTimer.current), []);
   useEffect(() => () => window.clearTimeout(fieldFeedbackTimer.current), []);
+
+  // Sync ref-based cursor state for render-safe access (effects may read refs)
+  useEffect(() => {
+    setIsPanning(panning.current);
+    setIsSpaceHeld(space.current);
+    if (!selectedShape) { setHoverHandle(null); return; }
+    const record = findShapeRecord();
+    if (!record || record.layer.id !== activeId) { setHoverHandle(null); return; }
+    const hoverDocPoint = { x: (ts.current.scrX - pan.x) / zoom, y: (ts.current.scrY - pan.y) / zoom };
+    setHoverHandle(getHandleAtPoint(record.shape, hoverDocPoint.x - record.layer.ox, hoverDocPoint.y - record.layer.oy));
+  }, [activeId, findShapeRecord, getHandleAtPoint, pan.x, pan.y, selectedShape, tick, zoom]);
 
   useEffect(() => {
     const onBeforeUnload = (e) => {
@@ -564,7 +587,7 @@ export default function PixelForge() {
     const ordered = [];
     const pushCandidate = (id) => {
       if (!id || seen.has(id)) return;
-      const layer = doc.current.layers[id];
+      const layer = layers.find(l => l.id === id);
       if (!layer || layer.type !== type) return;
       if (!includeLocked && layer.locked) return;
       seen.add(id);
@@ -572,13 +595,13 @@ export default function PixelForge() {
     };
     pushCandidate(lastLayerByType[type]);
     pushCandidate(activeId);
-    [...doc.current.order].reverse().forEach(pushCandidate);
+    [...layers].reverse().forEach(l => pushCandidate(l.id));
     if (!ordered.length && !includeLocked) return pickLikelyLayerId(type, { includeLocked: true });
     return ordered[0] || null;
   }
 
   function focusLayerId(id, { pulse = true } = {}) {
-    if (!id || !doc.current.layers[id]) return null;
+    if (!id || !layers.some(l => l.id === id)) return null;
     setActiveId(id);
     if (pulse) pulseLayer(id, "suggested");
     return id;
@@ -600,7 +623,7 @@ export default function PixelForge() {
       updatePrefs(prev => mergePrefs(prev, { toolPrefs: { lastVectorTool: nextTool } }));
     }
     if (prefs.behaviorPrefs.autoSwitchLayerForTool && requiredType) {
-      const current = doc.current.layers[activeId];
+      const current = layers.find(l => l.id === activeId);
       if (!current || current.type !== requiredType) focusLayerType(requiredType);
     }
     if (isCompactUI && nextTool !== "move" && nextTool !== "eyedropper") {
@@ -805,29 +828,26 @@ export default function PixelForge() {
 
   /* ─── Derived ─── */
   const activeLayer = layers.find(l => l.id === activeId);
-  const selectedShapeRecord = findShapeRecord();
-  const selectedShapeFields = selectionDraft || shapeToDraft(selectedShapeRecord?.shape);
+  const selectedShapeFields = selectionDraft;
   const toolMeta = TOOLS.find(t => t.id === tool) || TOOLS[0];
   const hoverToolMeta = TOOLS.find(t => t.id === hoverToolId) || null;
   const panelToolMeta = hoverToolMeta || toolMeta;
   const panelToolCopy = TOOL_COPY[panelToolMeta.id];
   const toolCompatible = !activeLayer || (activeLayer.type === "raster" ? toolMeta.raster : toolMeta.vector);
-  const activeIndex = activeId ? doc.current.order.indexOf(activeId) : -1;
+  const activeIndex = layers.findIndex(l => l.id === activeId);
   const canMoveDown = activeIndex > 0;
-  const canMoveUp = activeIndex >= 0 && activeIndex < doc.current.order.length - 1;
-  const canMergeDown = !!activeLayer && activeLayer.type === "raster" && activeIndex > 0 && doc.current.layers[doc.current.order[activeIndex - 1]]?.type === "raster";
+  const canMoveUp = activeIndex >= 0 && activeIndex < layers.length - 1;
+  const canMergeDown = !!activeLayer && activeLayer.type === "raster" && activeIndex > 0 && layers[activeIndex - 1]?.type === "raster";
   const requiredLayerType = getToolRequirement(tool);
   const suggestedLayerId = requiredLayerType && activeLayer?.type !== requiredLayerType ? pickLikelyLayerId(requiredLayerType) : null;
-  const suggestedLayer = suggestedLayerId ? doc.current.layers[suggestedLayerId] : null;
+  const suggestedLayer = suggestedLayerId ? layers.find(l => l.id === suggestedLayerId) : null;
   const recentColors = prefs.toolPrefs.recentColors || [DEFAULT_PRIMARY, DEFAULT_SECONDARY];
   const recentBrushSizes = prefs.toolPrefs.recentBrushSizes || [];
   const recentDocPresets = prefs.docPrefs.recentDocPresets || [];
   const layerOpacityValue = opacityDraft ?? (activeLayer ? Math.round(activeLayer.opacity * 100) : 100);
-  const docSignals = doc.current.order.reduce((acc, id) => {
-    const layer = doc.current.layers[id];
-    if (!layer) return acc;
+  const docSignals = layers.reduce((acc, layer) => {
     if (layer.type === "vector") {
-      acc.vectorShapes += layer.shapes.length;
+      acc.vectorShapes += layer.shapeCount;
       return acc;
     }
     if (!["background", "empty"].includes(layer.contentHint || "edited")) acc.editedRasterLayers += 1;
@@ -865,7 +885,7 @@ export default function PixelForge() {
         onClick: handleImportImage,
       },
     );
-  } else if (selectedShapeRecord) {
+  } else if (selectedShape) {
     nextActions.push(
       {
         key: "move-selection",
@@ -941,17 +961,13 @@ export default function PixelForge() {
     );
   }
   const visibleNextActions = nextActions.slice(0, 3);
-  const hoverDocPoint = { x: (ts.current.scrX - pan.x) / zoom, y: (ts.current.scrY - pan.y) / zoom };
-  const hoverHandle = selectedShapeRecord && selectedShapeRecord.layer.id === activeId
-    ? getHandleAtPoint(selectedShapeRecord.shape, hoverDocPoint.x - selectedShapeRecord.layer.ox, hoverDocPoint.y - selectedShapeRecord.layer.oy)
-    : null;
-  const cursorStyle = panning.current
+  const cursorStyle = isPanning
     ? "grabbing"
-    : space.current
+    : isSpaceHeld
       ? "grab"
       : tool === "move" && hoverHandle
         ? getResizeCursor(hoverHandle)
-        : tool === "move" && selectedShapeRecord
+        : tool === "move" && selectedShape
           ? "move"
           : tool === "eyedropper"
             ? "crosshair"
@@ -963,14 +979,14 @@ export default function PixelForge() {
   const showDesktopSection = (section) => !isCompactUI || mobilePanelTab === section;
 
   useEffect(() => {
-    const current = doc.current.layers[activeId];
+    const current = layers.find(l => l.id === activeId);
     if (!current?.type) return;
     setLastLayerByType(prev => prev[current.type] === current.id ? prev : { ...prev, [current.type]: current.id });
   }, [activeId, layers]);
 
   useEffect(() => {
     if (!isCompactUI) return;
-    if (selectedShapeRecord) {
+    if (selectedShape) {
       setMobilePanelTab("selection");
       return;
     }
@@ -981,18 +997,18 @@ export default function PixelForge() {
     if (isBlankDocument) {
       setMobilePanelTab("next");
     }
-  }, [isBlankDocument, isCompactUI, selectedShapeRecord, suggestedLayer, toolCompatible]);
+  }, [isBlankDocument, isCompactUI, selectedShape, suggestedLayer, toolCompatible]);
 
   useEffect(() => {
     if (!isCompactUI) return;
     if (mobilePanelTab === "next" && !showNextSection) {
-      setMobilePanelTab(selectedShapeRecord ? "selection" : "tool");
+      setMobilePanelTab(selectedShape ? "selection" : "tool");
       return;
     }
-    if (mobilePanelTab === "selection" && !selectedShapeRecord) {
+    if (mobilePanelTab === "selection" && !selectedShape) {
       setMobilePanelTab(showNextSection ? "next" : "tool");
     }
-  }, [isCompactUI, mobilePanelTab, selectedShapeRecord, showNextSection]);
+  }, [isCompactUI, mobilePanelTab, selectedShape, showNextSection]);
 
   useEffect(() => {
     if (!isBlankDocument) setStarterDismissed(false);
@@ -1111,7 +1127,7 @@ export default function PixelForge() {
           <div className="pf-mobile-tabs">
             {showNextSection && <button className={`pf-mobile-tab ${mobilePanelTab === "next" ? "active" : ""}`} onClick={() => setMobilePanelTab("next")}>Next</button>}
             <button className={`pf-mobile-tab ${mobilePanelTab === "tool" ? "active" : ""}`} onClick={() => setMobilePanelTab("tool")}>Tool</button>
-            {selectedShapeRecord && <button className={`pf-mobile-tab ${mobilePanelTab === "selection" ? "active" : ""}`} onClick={() => setMobilePanelTab("selection")}>Selection</button>}
+            {selectedShape && <button className={`pf-mobile-tab ${mobilePanelTab === "selection" ? "active" : ""}`} onClick={() => setMobilePanelTab("selection")}>Selection</button>}
             <button className={`pf-mobile-tab ${mobilePanelTab === "palette" ? "active" : ""}`} onClick={() => setMobilePanelTab("palette")}>Colors</button>
             <button className={`pf-mobile-tab ${mobilePanelTab === "layers" ? "active" : ""}`} onClick={() => setMobilePanelTab("layers")}>Layers</button>
           </div>
@@ -1158,9 +1174,9 @@ export default function PixelForge() {
             />
           )}
 
-          {selectedShapeRecord && showDesktopSection("selection") && (
+          {selectedShape && selectedShapeType && showDesktopSection("selection") && (
             <SelectionSection
-              selectedShapeRecord={selectedShapeRecord}
+              selectedShapeType={selectedShapeType}
               selectedShapeFields={selectedShapeFields}
               beginSelectionFieldEdit={beginSelectionFieldEdit}
               handleSelectionFieldInput={handleSelectionFieldInput}
