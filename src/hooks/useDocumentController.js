@@ -1,0 +1,466 @@
+import { useCallback } from "react";
+import {
+  DEFAULT_W, DEFAULT_H, DEFAULT_BG,
+  DEFAULT_PRIMARY, DEFAULT_SECONDARY,
+  HEX_COLOR_RE, RECENT_PRESETS_LIMIT,
+} from "../constants.js";
+import {
+  uid, clamp, makeCanvas, mergePrefs,
+  normalizeHexColor, pushRecentPreset, getAnchorOffset,
+} from "../utils.js";
+import { drawShape } from "../shapes.js";
+import {
+  createDefaultDocument, buildProjectPayload, hydrateProject, hydrateDraftPayload,
+} from "../serialization.js";
+import { saveProjectPayload, supportsFileSave } from "../projectFiles.js";
+
+export default function useDocumentController({
+  docRef,
+  renderCacheRef,
+  fileRef,
+  importRef,
+  docState,
+  prefs,
+  stateSetters,
+  historyApi,
+  viewportApi,
+  feedbackApi,
+  prefsApi,
+  recoveryApi,
+}) {
+  const {
+    docW,
+    docH,
+    activeId,
+    selectedShape,
+    saveHandle,
+    isDirty,
+    isCompactUI,
+    docForm,
+    resizeForm,
+    recoveryDraft,
+    preferredRasterTool,
+  } = docState;
+
+  const {
+    setDocW,
+    setDocH,
+    setActiveId,
+    setSelectedShape,
+    setResizeForm,
+    setTool,
+    setBrushSize,
+    setBrushOpacity,
+    setFillOn,
+    setStrokeOn,
+    setStrokeW,
+    setColor1,
+    setColor2,
+    setStarterDismissed,
+    setIsDirty,
+    setLastSavedAt,
+    setSaveHandle,
+    setModal,
+    setMobilePanelTab,
+    setDocForm,
+  } = stateSetters;
+
+  const {
+    clearHistory,
+    syncEditor,
+    withFullHistory,
+  } = historyApi;
+
+  const { fitViewTo } = viewportApi;
+  const { flash, triggerFeedback, triggerFieldFeedback } = feedbackApi;
+  const { updatePrefs } = prefsApi;
+  const { clearRecoveryDraft } = recoveryApi;
+
+  const buildPayload = useCallback(
+    () => buildProjectPayload(docRef.current, docW, docH, activeId, selectedShape),
+    [activeId, docH, docRef, docW, selectedShape],
+  );
+
+  const markClean = useCallback(() => {
+    setIsDirty(false);
+    setLastSavedAt(Date.now());
+    clearRecoveryDraft();
+  }, [clearRecoveryDraft, setIsDirty, setLastSavedAt]);
+
+  const applyProjectState = useCallback((project, { dirty = false, savedAt = null } = {}) => {
+    docRef.current = project.doc;
+    clearHistory();
+    renderCacheRef.current = {};
+    setDocW(project.docW);
+    setDocH(project.docH);
+    setActiveId(project.activeId);
+    setSelectedShape(project.selectedShape || null);
+    setResizeForm(prev => ({ ...prev, width: project.docW, height: project.docH }));
+    syncEditor();
+    requestAnimationFrame(() => fitViewTo(project.docW, project.docH));
+    setIsDirty(dirty);
+    setLastSavedAt(savedAt);
+    setSaveHandle(null);
+    if (!dirty) clearRecoveryDraft();
+  }, [
+    clearHistory,
+    clearRecoveryDraft,
+    docRef,
+    fitViewTo,
+    renderCacheRef,
+    setActiveId,
+    setDocH,
+    setDocW,
+    setIsDirty,
+    setLastSavedAt,
+    setResizeForm,
+    setSaveHandle,
+    setSelectedShape,
+    syncEditor,
+  ]);
+
+  const resetDocument = useCallback((w = DEFAULT_W, h = DEFAULT_H, bgColor = DEFAULT_BG, { dirty = false } = {}) => {
+    const next = createDefaultDocument(w, h, bgColor);
+    docRef.current = next.doc;
+    clearHistory();
+    renderCacheRef.current = {};
+    setDocW(w);
+    setDocH(h);
+    setActiveId(next.activeId);
+    setSelectedShape(null);
+    setTool("brush");
+    setBrushSize(10);
+    setBrushOpacity(1);
+    setFillOn(true);
+    setStrokeOn(true);
+    setStrokeW(2);
+    setColor1(DEFAULT_PRIMARY);
+    setColor2(DEFAULT_SECONDARY);
+    setResizeForm({ width: w, height: h, anchor: "center" });
+    setStarterDismissed(false);
+    syncEditor();
+    requestAnimationFrame(() => fitViewTo(w, h));
+    setIsDirty(dirty);
+    setLastSavedAt(dirty ? null : Date.now());
+    setSaveHandle(null);
+    if (!dirty) clearRecoveryDraft();
+  }, [
+    clearHistory,
+    clearRecoveryDraft,
+    docRef,
+    fitViewTo,
+    renderCacheRef,
+    setActiveId,
+    setBrushOpacity,
+    setBrushSize,
+    setColor1,
+    setColor2,
+    setDocH,
+    setDocW,
+    setFillOn,
+    setIsDirty,
+    setLastSavedAt,
+    setResizeForm,
+    setSaveHandle,
+    setSelectedShape,
+    setStarterDismissed,
+    setStrokeOn,
+    setStrokeW,
+    setTool,
+    syncEditor,
+  ]);
+
+  const openNewDocument = useCallback(() => {
+    setDocForm(prefs.docPrefs.lastNewDoc || { width: docW, height: docH, background: DEFAULT_BG });
+    setModal("new-document");
+  }, [docH, docW, prefs.docPrefs.lastNewDoc, setDocForm, setModal]);
+
+  const openResizeDocument = useCallback(() => {
+    setResizeForm({ width: docW, height: docH, anchor: prefs.docPrefs.lastResizeAnchor || "center" });
+    setModal("resize-document");
+  }, [docH, docW, prefs.docPrefs.lastResizeAnchor, setModal, setResizeForm]);
+
+  const handleSave = useCallback(async () => {
+    try {
+      const result = await saveProjectPayload(buildPayload(), saveHandle);
+      if (result.mode === "file") {
+        setSaveHandle(result.handle);
+        markClean();
+        triggerFeedback("save", "success");
+        flash("Project saved", "success");
+        return;
+      }
+      triggerFeedback("save", "success");
+      flash("Project downloaded. Browser fallback does not mark the project as saved.", "success", 2600);
+    } catch (err) {
+      triggerFeedback("save", "error");
+      flash("Save error: " + err.message, "error");
+    }
+  }, [buildPayload, flash, markClean, saveHandle, setSaveHandle, triggerFeedback]);
+
+  const handleLoad = useCallback(() => {
+    if (isDirty && !window.confirm("Open another project? Current unsaved changes will be kept only in the browser draft.")) return;
+    fileRef.current?.click();
+  }, [fileRef, isDirty]);
+
+  const onFileChange = useCallback(async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const project = await hydrateProject(JSON.parse(text));
+      setModal(null);
+      applyProjectState(project, { dirty: false, savedAt: Date.now() });
+      triggerFeedback("load", "success");
+      flash("Loaded " + file.name, "success");
+    } catch (err) {
+      triggerFeedback("load", "error");
+      flash("Load error: " + err.message, "error");
+    }
+    event.target.value = "";
+  }, [applyProjectState, flash, setModal, triggerFeedback]);
+
+  const handleImportImage = useCallback(() => {
+    importRef.current?.click();
+  }, [importRef]);
+
+  const onImportImageChange = useCallback(async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    let imageUrl = null;
+    try {
+      imageUrl = URL.createObjectURL(file);
+      const image = new window.Image();
+      await new Promise((resolve, reject) => {
+        image.onload = resolve;
+        image.onerror = reject;
+        image.src = imageUrl;
+      });
+
+      withFullHistory(() => {
+        const scale = Math.min(docW / image.width, docH / image.height, 1);
+        const drawW = Math.max(1, Math.round(image.width * scale));
+        const drawH = Math.max(1, Math.round(image.height * scale));
+        const layer = {
+          id: uid(),
+          name: file.name.replace(/\.[^.]+$/, "") || "Imported Image",
+          type: "raster",
+          visible: true,
+          opacity: 1,
+          blend: "source-over",
+          locked: false,
+          contentHint: "image",
+          canvas: makeCanvas(docW, docH),
+          ox: 0,
+          oy: 0,
+        };
+        const ctx = layer.canvas.getContext("2d");
+        ctx.drawImage(
+          image,
+          Math.round((docW - drawW) / 2),
+          Math.round((docH - drawH) / 2),
+          drawW,
+          drawH,
+        );
+        docRef.current.layers[layer.id] = layer;
+        docRef.current.order.push(layer.id);
+        setActiveId(layer.id);
+        setSelectedShape(null);
+        return { activeId: layer.id, selectedShape: null };
+      });
+      triggerFeedback("import", "success");
+      flash("Imported " + file.name, "success");
+    } catch (err) {
+      triggerFeedback("import", "error");
+      flash("Import error: " + err.message, "error");
+    } finally {
+      if (imageUrl) URL.revokeObjectURL(imageUrl);
+    }
+    event.target.value = "";
+  }, [docH, docRef, docW, flash, setActiveId, setSelectedShape, triggerFeedback, withFullHistory]);
+
+  const applyResizeCanvas = useCallback(() => {
+    const nextW = clamp(Math.round(+resizeForm.width || docW), 64, 8192);
+    const nextH = clamp(Math.round(+resizeForm.height || docH), 64, 8192);
+    const { dx, dy } = getAnchorOffset(resizeForm.anchor, docW, docH, nextW, nextH);
+    withFullHistory(() => {
+      docRef.current.order.forEach(id => {
+        const layer = docRef.current.layers[id];
+        if (layer.type === "raster") {
+          const oldCanvas = layer.canvas;
+          const nextCanvas = makeCanvas(nextW, nextH);
+          nextCanvas.getContext("2d").drawImage(oldCanvas, dx, dy);
+          layer.canvas = nextCanvas;
+          return;
+        }
+        layer.shapes.forEach(shape => {
+          if (shape.type === "line") {
+            shape.x1 += dx;
+            shape.y1 += dy;
+            shape.x2 += dx;
+            shape.y2 += dy;
+            return;
+          }
+          shape.x += dx;
+          shape.y += dy;
+        });
+      });
+      setDocW(nextW);
+      setDocH(nextH);
+      setModal(null);
+      requestAnimationFrame(() => fitViewTo(nextW, nextH));
+      return { docW: nextW, docH: nextH, activeId, selectedShape };
+    });
+    updatePrefs(prev => mergePrefs(prev, {
+      docPrefs: {
+        lastResizeAnchor: resizeForm.anchor,
+      },
+    }));
+    triggerFeedback("resize-doc", "success");
+    flash("Canvas resized", "success", 1200);
+  }, [
+    activeId,
+    docH,
+    docRef,
+    docW,
+    fitViewTo,
+    flash,
+    resizeForm,
+    selectedShape,
+    setDocH,
+    setDocW,
+    setModal,
+    triggerFeedback,
+    updatePrefs,
+    withFullHistory,
+  ]);
+
+  const applyNewDocument = useCallback(() => {
+    const width = clamp(Math.round(+docForm.width || DEFAULT_W), 64, 8192);
+    const height = clamp(Math.round(+docForm.height || DEFAULT_H), 64, 8192);
+    const rawBackground = (docForm.background || "").trim();
+    const backgroundHex = rawBackground.startsWith("#") ? rawBackground : `#${rawBackground}`;
+    if (!HEX_COLOR_RE.test(backgroundHex)) {
+      triggerFieldFeedback("doc-background", "error");
+      triggerFeedback("new-doc", "error");
+      flash("Use a valid background hex color.", "error");
+      return;
+    }
+    const background = normalizeHexColor(docForm.background, DEFAULT_BG);
+    withFullHistory(() => {
+      const next = createDefaultDocument(width, height, background);
+      docRef.current = next.doc;
+      renderCacheRef.current = {};
+      setDocW(width);
+      setDocH(height);
+      setActiveId(next.activeId);
+      setSelectedShape(null);
+      setModal(null);
+      setTool(preferredRasterTool);
+      setSaveHandle(null);
+      setStarterDismissed(false);
+      requestAnimationFrame(() => fitViewTo(width, height));
+      return { docW: width, docH: height, activeId: next.activeId, selectedShape: null };
+    });
+    updatePrefs(prev => mergePrefs(prev, {
+      docPrefs: {
+        lastNewDoc: { width, height, background },
+        recentDocPresets: pushRecentPreset(
+          prev.docPrefs.recentDocPresets,
+          { width, height, background },
+          RECENT_PRESETS_LIMIT,
+        ),
+      },
+    }));
+    if (isCompactUI) setMobilePanelTab("next");
+    triggerFeedback("new-doc", "success");
+    flash("New document ready", "success");
+  }, [
+    docForm,
+    docRef,
+    fitViewTo,
+    flash,
+    isCompactUI,
+    preferredRasterTool,
+    renderCacheRef,
+    setActiveId,
+    setDocH,
+    setDocW,
+    setMobilePanelTab,
+    setModal,
+    setSaveHandle,
+    setSelectedShape,
+    setStarterDismissed,
+    setTool,
+    triggerFeedback,
+    triggerFieldFeedback,
+    updatePrefs,
+    withFullHistory,
+  ]);
+
+  const recoverDraftProject = useCallback(() => {
+    if (!recoveryDraft?.project) return;
+    hydrateDraftPayload(recoveryDraft.project)
+      .then(project => {
+        applyProjectState(project, { dirty: true, savedAt: recoveryDraft.savedAt || null });
+        clearRecoveryDraft();
+        triggerFeedback("recover", "success");
+        flash("Recovered autosaved draft", "success");
+      })
+      .catch(() => {
+        clearRecoveryDraft();
+        triggerFeedback("recover", "error");
+        flash("Draft recovery failed", "error");
+      });
+  }, [applyProjectState, clearRecoveryDraft, flash, recoveryDraft, triggerFeedback]);
+
+  const discardRecoveredDraft = useCallback(() => {
+    clearRecoveryDraft();
+  }, [clearRecoveryDraft]);
+
+  const handleExport = useCallback(() => {
+    const exportCanvas = makeCanvas(docW, docH);
+    const ctx = exportCanvas.getContext("2d");
+    const editorDoc = docRef.current;
+    for (const id of editorDoc.order) {
+      const layer = editorDoc.layers[id];
+      if (!layer?.visible) continue;
+      ctx.save();
+      ctx.globalAlpha = layer.opacity;
+      ctx.globalCompositeOperation = layer.blend;
+      ctx.translate(layer.ox, layer.oy);
+      if (layer.type === "raster") ctx.drawImage(layer.canvas, 0, 0);
+      else layer.shapes.forEach(shape => drawShape(ctx, shape));
+      ctx.restore();
+    }
+    const anchor = document.createElement("a");
+    anchor.href = exportCanvas.toDataURL("image/png");
+    anchor.download = "export.png";
+    anchor.click();
+    triggerFeedback("export", "success");
+    flash("Exported PNG", "success");
+  }, [docH, docRef, docW, flash, triggerFeedback]);
+
+  const canUseFileSave = supportsFileSave();
+  const saveButtonLabel = canUseFileSave ? "Save" : "Download";
+  const saveButtonTitle = canUseFileSave ? "Save project" : "Download project file";
+
+  return {
+    resetDocument,
+    openNewDocument,
+    openResizeDocument,
+    handleSave,
+    handleLoad,
+    onFileChange,
+    handleImportImage,
+    onImportImageChange,
+    applyResizeCanvas,
+    applyNewDocument,
+    recoverDraftProject,
+    discardRecoveredDraft,
+    handleExport,
+    canUseFileSave,
+    saveButtonLabel,
+    saveButtonTitle,
+  };
+}

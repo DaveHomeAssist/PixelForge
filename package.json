@@ -3,10 +3,18 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22 <25",
+    "npm": ">=10"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint": "eslint src eslint.config.js vitest.config.js vite.config.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "ci": "npm run lint && npm run test && npm run build"
   },
   "dependencies": {
     "lucide-react": "^1.7.0",
@@ -14,6 +22,19 @@
     "react-dom": "^19.2.5"
   },
   "devDependencies": {
-    "vite": "^8.0.7"
+    "@eslint/js": "^9.39.4",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@vitejs/plugin-react": "^6.0.1",
+    "esbuild": "^0.28.0",
+    "eslint": "^9.39.4",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "fake-indexeddb": "^6.2.5",
+    "globals": "^17.4.0",
+    "jest-canvas-mock": "^2.5.2",
+    "jsdom": "^29.0.2",
+    "vite": "^8.0.7",
+    "vitest": "^2.1.9"
   }
 }
