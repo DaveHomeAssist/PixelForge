@@ -14,6 +14,7 @@ import useAutosaveRecovery from "./hooks/useAutosaveRecovery.js";
 import useHistory from "./hooks/useHistory.js";
 import useLayerOps from "./hooks/useLayerOps.js";
 import useDocumentController from "./hooks/useDocumentController.js";
+import useCanvasInteractions from "./hooks/useCanvasInteractions.js";
 
 import {
   DEFAULT_W, DEFAULT_H, MIN_ZOOM, MAX_ZOOM,
@@ -21,14 +22,10 @@ import {
   TOOLS, TOOL_COPY, HEX_COLOR_RE,
 } from "./constants.js";
 import {
-  uid, clamp, dist, lerp, rgbHex, normalizeHexColor, isEditableTarget,
-  ensureShape, cloneShape, mergePrefs,
-  getToolRequirement, extractRegion,
+  uid, clamp, normalizeHexColor, isEditableTarget,
+  cloneShape, mergePrefs, getToolRequirement,
 } from "./utils.js";
-import {
-  getShapeHandles, getResizeCursor,
-  applyRectResize, applyLineHandle, hitShape,
-} from "./shapes.js";
+import { getResizeCursor } from "./shapes.js";
 import { renderEditor } from "./render.js";
 
 /* Inlined constants, utilities, shapes, serialization, autosave, and CSS
@@ -202,11 +199,6 @@ export default function PixelForge() {
     markDirty,
   });
 
-  function s2d(sx, sy) {
-    const r = cvRef.current?.getBoundingClientRect();
-    return r ? { x: (sx - r.left - pan.x) / zoom, y: (sy - r.top - pan.y) / zoom } : { x: 0, y: 0 };
-  }
-
   function fitViewTo(w, h) {
     if (!vpRef.current) return;
     const vw = vpRef.current.clientWidth;
@@ -363,6 +355,47 @@ export default function PixelForge() {
     flash,
   });
 
+  const {
+    getHandleAtPoint,
+    onDown,
+    onMove,
+    onUp,
+  } = useCanvasInteractions({
+    cvRef,
+    vpRef,
+    tsRef: ts,
+    spaceRef: space,
+    panningRef: panning,
+    panStateRef: panSt,
+    docRef: doc,
+    activeId,
+    selectedShape,
+    tool,
+    zoom,
+    pan,
+    brushSize,
+    brushOpacity,
+    color1,
+    fillOn,
+    strokeOn,
+    strokeW,
+    getLayer,
+    findShapeRecord,
+    clearSelection,
+    canEditLayer,
+    capturePatchSnapshot,
+    commitPatchHistory,
+    pushHistory,
+    syncEditor,
+    setSelectedShape,
+    setColor1,
+    setPan,
+    setZoom,
+    bump,
+    flash,
+    triggerFeedback,
+  });
+
   useEffect(() => { setColor1Input(color1); }, [color1]);
   useEffect(() => { setColor2Input(color2); }, [color2]);
   useEffect(() => {
@@ -506,21 +539,6 @@ export default function PixelForge() {
   }
 
   /* ─── Brush drawing ─── */
-  function stamp(ctx, x, y, sz, col, op, erase) {
-    ctx.save();
-    ctx.globalAlpha = op;
-    ctx.globalCompositeOperation = erase ? "destination-out" : "source-over";
-    ctx.fillStyle = erase ? "rgba(0,0,0,1)" : col;
-    ctx.beginPath(); ctx.arc(x, y, sz / 2, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
-  }
-
-  function brushLine(ctx, x0, y0, x1, y1, sz, col, op, erase) {
-    const d = dist(x0, y0, x1, y1), step = Math.max(0.5, sz * 0.15);
-    const n = Math.max(1, Math.ceil(d / step));
-    for (let i = 0; i <= n; i++) { const t = i / n; stamp(ctx, lerp(x0, x1, t), lerp(y0, y1, t), sz, col, op, erase); }
-  }
-
   function canEditLayer(layer, actionLabel = "edit") {
     if (!layer) return false;
     if (!layer.locked) return true;
@@ -590,45 +608,6 @@ export default function PixelForge() {
     }
   }
 
-
-  function commitRasterStroke(layerId) {
-    const t = ts.current;
-    if (!t.historyBefore?.layers?.[0]?.imageData || !t.strokeBounds) {
-      commitPatchHistory(t.historyBefore, [layerId]);
-      return;
-    }
-    const layer = getLayer(layerId);
-    if (!layer?.canvas) {
-      commitPatchHistory(t.historyBefore, [layerId]);
-      return;
-    }
-    const bounds = t.strokeBounds;
-    const cw = layer.canvas.width, ch = layer.canvas.height;
-    const MARGIN = 2;
-    const rx = Math.max(0, Math.floor(bounds.minX) - MARGIN);
-    const ry = Math.max(0, Math.floor(bounds.minY) - MARGIN);
-    const rx2 = Math.min(cw, Math.ceil(bounds.maxX) + MARGIN + 1);
-    const ry2 = Math.min(ch, Math.ceil(bounds.maxY) + MARGIN + 1);
-    const rw = rx2 - rx, rh = ry2 - ry;
-    if (rw <= 0 || rh <= 0 || rw * rh > cw * ch * 0.5) {
-      commitPatchHistory(t.historyBefore, [layerId]);
-      return;
-    }
-    const region = { x: rx, y: ry, w: rw, h: rh };
-    const beforeFull = t.historyBefore.layers[0].imageData;
-    const beforeRegion = extractRegion(beforeFull, region);
-    const afterRegion = layer.canvas.getContext("2d").getImageData(rx, ry, rw, rh);
-    const meta = {
-      id: layer.id, name: layer.name, type: "raster",
-      visible: layer.visible, opacity: layer.opacity, blend: layer.blend,
-      locked: !!layer.locked, contentHint: layer.contentHint || "edited",
-      ox: layer.ox, oy: layer.oy,
-    };
-    const before = { mode: "patch", layers: [{ ...meta, region, imageData: beforeRegion }] };
-    const after = { mode: "patch", layers: [{ ...meta, region, imageData: afterRegion }], activeId, selectedShape };
-    pushHistory(before, after);
-    syncEditor();
-  }
 
   function beginControlTx(layerId) {
     controlTxRef.current = { layerId, snapshot: capturePatchSnapshot([layerId], true), dirty: false };
@@ -724,213 +703,6 @@ export default function PixelForge() {
       y: shape.y + 12,
     };
   }
-
-
-  function getHandleAtPoint(shape, px, py) {
-    const radius = Math.max(6, 10 / zoom);
-    return getShapeHandles(shape).find(handle => dist(handle.x, handle.y, px, py) <= radius)?.id || null;
-  }
-
-  /* ─── Pointer events ─── */
-  function onDown(e) {
-    e.preventDefault();
-    const rect = cvRef.current?.getBoundingClientRect();
-    if (rect) {
-      ts.current.scrX = e.clientX - rect.left;
-      ts.current.scrY = e.clientY - rect.top;
-    }
-    if (e.button === 1 || (e.button === 0 && space.current)) {
-      panning.current = true;
-      panSt.current = { x: e.clientX, y: e.clientY, ox: pan.x, oy: pan.y };
-      return;
-    }
-    if (e.button !== 0) return;
-
-    const p = s2d(e.clientX, e.clientY);
-    const t = ts.current;
-    t.down = true;
-    t.sx = p.x;
-    t.sy = p.y;
-    t.lx = p.x;
-    t.ly = p.y;
-    t.preview = null;
-    t.drag = null;
-    t.historyBefore = null;
-    t.selectionHandle = null;
-    t.startShape = null;
-    t.moved = false;
-    t.strokeBounds = null;
-    const layer = doc.current.layers[activeId];
-    if (!layer) return;
-
-    if (tool === "brush" || tool === "eraser") {
-      if (!canEditLayer(layer, tool)) { t.down = false; return; }
-      if (layer.type !== "raster") { triggerFeedback(`tool-${tool}`, "error"); flash("Select a raster layer for " + tool, "error"); t.down = false; return; }
-      const c = layer.canvas.getContext("2d");
-      t.historyBefore = capturePatchSnapshot([layer.id]);
-      layer.contentHint = "edited";
-      const sx = p.x - layer.ox, sy = p.y - layer.oy;
-      const halfBrush = brushSize / 2;
-      t.strokeBounds = { minX: sx - halfBrush, minY: sy - halfBrush, maxX: sx + halfBrush, maxY: sy + halfBrush };
-      stamp(c, sx, sy, brushSize, color1, brushOpacity, tool === "eraser");
-      bump();
-    } else if (tool === "move") {
-      if (layer.type === "vector") {
-        const selectedRecord = findShapeRecord();
-        if (selectedRecord?.layer.id === layer.id) {
-          const handle = getHandleAtPoint(selectedRecord.shape, p.x - layer.ox, p.y - layer.oy);
-          if (handle) {
-            if (!canEditLayer(layer, "transform shapes")) { t.down = false; return; }
-            t.selectionHandle = handle;
-            t.drag = { shapeId: selectedRecord.shape.id };
-            t.startShape = cloneShape(selectedRecord.shape);
-            t.historyBefore = capturePatchSnapshot([layer.id], true);
-            return;
-          }
-        }
-        for (let i = layer.shapes.length - 1; i >= 0; i--) {
-          if (hitShape(layer.shapes[i], p.x - layer.ox, p.y - layer.oy)) {
-            const s = layer.shapes[i];
-            const nextSelection = { layerId: layer.id, shapeId: s.id };
-            setSelectedShape(nextSelection);
-            if (layer.locked) { t.down = false; return; }
-            t.drag = { shapeId: s.id };
-            t.startShape = cloneShape(s);
-            t.historyBefore = capturePatchSnapshot([layer.id], true, { selectedShape: nextSelection });
-            break;
-          }
-        }
-        if (!t.drag && !t.selectionHandle) clearSelection();
-      }
-      if (!t.drag && !t.selectionHandle) {
-        if (!canEditLayer(layer, "move this layer")) { t.down = false; return; }
-        t.savedOx = layer.ox;
-        t.savedOy = layer.oy;
-        t.historyBefore = capturePatchSnapshot([layer.id], true);
-      }
-    } else if (["rect","ellipse","line"].includes(tool)) {
-      if (!canEditLayer(layer, "draw shapes")) { t.down = false; return; }
-      if (layer.type !== "vector") { triggerFeedback(`tool-${tool}`, "error"); flash("Select a vector layer for shapes", "error"); t.down = false; return; }
-      clearSelection();
-      t.historyBefore = capturePatchSnapshot([layer.id], true, { selectedShape: null });
-    } else if (tool === "eyedropper") {
-      t.down = false;
-      const cv = cvRef.current;
-      if (cv) {
-        const dpr = window.devicePixelRatio || 1;
-        const r = cv.getBoundingClientRect();
-        const px = (e.clientX - r.left) * dpr, py = (e.clientY - r.top) * dpr;
-        const d = cv.getContext("2d").getImageData(px, py, 1, 1).data;
-        if (d[3] > 0) {
-          const h = rgbHex(d[0], d[1], d[2]);
-          setColor1(h);
-          triggerFeedback("color-primary", "success", 140);
-          flash("Picked " + h, "success", 1200);
-        }
-      }
-    }
-  }
-
-  function onMove(e) {
-    const r = cvRef.current?.getBoundingClientRect();
-    if (r) { ts.current.scrX = e.clientX - r.left; ts.current.scrY = e.clientY - r.top; }
-
-    if (panning.current) {
-      setPan({ x: panSt.current.ox + e.clientX - panSt.current.x, y: panSt.current.oy + e.clientY - panSt.current.y });
-      return;
-    }
-    if (!ts.current.down) { if (["brush","eraser"].includes(tool)) bump(); return; }
-
-    const p = s2d(e.clientX, e.clientY);
-    const t = ts.current;
-    const layer = doc.current.layers[activeId];
-    if (!layer) return;
-
-    if (tool === "brush" || tool === "eraser") {
-      if (layer.type === "raster") {
-        const x0 = t.lx - layer.ox, y0 = t.ly - layer.oy;
-        const x1 = p.x - layer.ox, y1 = p.y - layer.oy;
-        brushLine(layer.canvas.getContext("2d"), x0, y0, x1, y1, brushSize, color1, brushOpacity, tool === "eraser");
-        if (t.strokeBounds) {
-          const hb = brushSize / 2;
-          t.strokeBounds.minX = Math.min(t.strokeBounds.minX, x0 - hb, x1 - hb);
-          t.strokeBounds.minY = Math.min(t.strokeBounds.minY, y0 - hb, y1 - hb);
-          t.strokeBounds.maxX = Math.max(t.strokeBounds.maxX, x0 + hb, x1 + hb);
-          t.strokeBounds.maxY = Math.max(t.strokeBounds.maxY, y0 + hb, y1 + hb);
-        }
-        t.moved = true;
-        bump();
-      }
-    } else if (tool === "move") {
-      const dx = p.x - t.sx, dy = p.y - t.sy;
-      if (dx || dy) t.moved = true;
-      if (layer.type === "vector" && t.drag?.shapeId) {
-        const record = findShapeRecord({ layerId: layer.id, shapeId: t.drag.shapeId });
-        if (!record || !t.startShape) return;
-        if (t.selectionHandle) {
-          if (record.shape.type === "line") applyLineHandle(record.shape, t.selectionHandle, t.startShape, dx, dy);
-          else applyRectResize(record.shape, t.selectionHandle, t.startShape, dx, dy);
-        } else if (record.shape.type === "line") {
-          record.shape.x1 = t.startShape.x1 + dx;
-          record.shape.y1 = t.startShape.y1 + dy;
-          record.shape.x2 = t.startShape.x2 + dx;
-          record.shape.y2 = t.startShape.y2 + dy;
-        } else {
-          record.shape.x = t.startShape.x + dx;
-          record.shape.y = t.startShape.y + dy;
-        }
-      } else {
-        layer.ox = t.savedOx + dx;
-        layer.oy = t.savedOy + dy;
-      }
-      bump();
-    } else if (["rect","ellipse"].includes(tool)) {
-      const ox = layer.ox, oy = layer.oy;
-      t.preview = { type: tool, x: Math.min(t.sx, p.x) - ox, y: Math.min(t.sy, p.y) - oy, w: Math.abs(p.x - t.sx), h: Math.abs(p.y - t.sy), fill: fillOn ? color1 : null, stroke: strokeOn ? color2 : null, strokeWidth: strokeW };
-      t.moved = true;
-      bump();
-    } else if (tool === "line") {
-      t.preview = { type: "line", x1: t.sx - layer.ox, y1: t.sy - layer.oy, x2: p.x - layer.ox, y2: p.y - layer.oy, stroke: color1, strokeWidth: strokeW };
-      t.moved = true;
-      bump();
-    }
-    t.lx = p.x; t.ly = p.y;
-  }
-
-  function onUp() {
-    if (panning.current) { panning.current = false; return; }
-    const t = ts.current;
-    if (!t.down) return;
-    t.down = false;
-    const layer = doc.current.layers[activeId];
-
-    if ((tool === "brush" || tool === "eraser") && layer?.type === "raster" && t.historyBefore) {
-      commitRasterStroke(layer.id);
-    } else if (["rect","ellipse","line"].includes(tool) && layer?.type === "vector" && t.preview) {
-      const shape = ensureShape({ ...t.preview });
-      layer.shapes.push(shape);
-      const nextSelection = { layerId: layer.id, shapeId: shape.id };
-      setSelectedShape(nextSelection);
-      commitPatchHistory(t.historyBefore, [layer.id], { selectedShape: nextSelection });
-      t.preview = null;
-    } else if (tool === "move" && layer) {
-      if (t.historyBefore && t.moved) {
-        commitPatchHistory(
-          t.historyBefore,
-          [layer.id],
-          { selectedShape: t.drag?.shapeId ? { layerId: layer.id, shapeId: t.drag.shapeId } : selectedShape },
-        );
-      }
-    }
-    t.drag = null;
-    t.selectionHandle = null;
-    t.startShape = null;
-    t.historyBefore = null;
-    t.moved = false;
-    t.strokeBounds = null;
-    bump();
-  }
-
   /* ─── Keyboard ─── */
   useEffect(() => {
     const kd = (e) => {
@@ -962,27 +734,6 @@ export default function PixelForge() {
     window.addEventListener("keydown", kd); window.addEventListener("keyup", ku);
     return () => { window.removeEventListener("keydown", kd); window.removeEventListener("keyup", ku); };
   }, [clearSelection, deleteSelectedShape, duplicateActiveLayer, duplicateSelectedShape, handleSave, selectedShape, swapColors]);
-
-  /* ─── Wheel (attached imperatively for { passive: false }) ─── */
-  useEffect(() => {
-    const el = vpRef.current;
-    if (!el) return;
-    const handler = (e) => {
-      e.preventDefault();
-      const r = cvRef.current?.getBoundingClientRect();
-      if (!r) return;
-      const mx = e.clientX - r.left, my = e.clientY - r.top;
-      const f = e.deltaY < 0 ? 1.12 : 0.89;
-      setZoom(prevZoom => {
-        const nz = clamp(prevZoom * f, MIN_ZOOM, MAX_ZOOM);
-        const k = nz / prevZoom;
-        setPan(p => ({ x: mx - k * (mx - p.x), y: my - k * (my - p.y) }));
-        return nz;
-      });
-    };
-    el.addEventListener("wheel", handler, { passive: false });
-    return () => el.removeEventListener("wheel", handler);
-  }, []);
 
   function duplicateSelectedShape() {
     const record = findShapeRecord();
