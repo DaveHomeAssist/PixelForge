@@ -1,0 +1,104 @@
+================================================================================
+  PIXELFORGE — IMPLEMENTATION PLAN
+  Source: Code Review (2026-04-12)
+  Target: Clean lint, passing tests, maintainable architecture
+================================================================================
+
+ASSUMPTIONS
+- Single developer (Dave) is primary owner; Claude Code assists
+- React 19 + Vite 8 + Vitest stack stays as-is
+- No feature additions — this is a stabilization pass
+- Target: zero breaking errors, all tests green
+
+
+================================================================================
+PHASE 1 — CRITICAL: FIX TEST INFRASTRUCTURE            [COMPLETED P1A-P1C]
+================================================================================
+
+1A. Replace jest-canvas-mock with Vitest-compatible mock       COMPLETED
+    - jest-canvas-mock calls jest.isMockFunction (doesn't exist in Vitest)
+    - All 8 test suites fail before any test runs
+    - Fix: switch to vitest-canvas-mock or write manual canvas shim in setup.js
+
+1B. Add eslint-plugin-react to ESLint config                   COMPLETED
+    - Missing plugin causes 28+ false "unused vars" warnings on JSX imports
+    - Fix: npm install eslint-plugin-react, add to eslint.config.js
+    - Enable react/jsx-uses-vars and react/jsx-uses-react rules
+
+1C. Resolve 7 remaining react-hooks/refs lint errors           COMPLETED
+    - All are false positives: onClick callbacks in nextActions that
+      transitively close over ref-reading useCallbacks
+    - Fix: targeted eslint-disable-next-line comments with explanation
+
+    Owner: Dave / Claude Code
+
+
+================================================================================
+PHASE 2 — CODE QUALITY QUICK WINS                      Est: 1 session
+================================================================================
+
+2A. Replace JSON.parse(JSON.stringify) in cloneShape           COMPLETED
+    - Location: src/utils.js:36
+    - Risk: silent data loss if shapes ever gain non-JSON fields
+    - Fix: replace with structuredClone()
+    - All target browsers support it
+
+2B. Memoize keyboard handler dependencies                      COMPLETED
+    - All keyboard-deps wrapped in useCallback
+    - swapColors, duplicate/deleteSelectedShape, selectTool, plus transitive helpers
+    - Commit: 6e13d76
+
+
+================================================================================
+PHASE 3 — PERFORMANCE                                  COMPLETED
+================================================================================
+
+3A. Throttle brush bump() to one rAF per frame                 COMPLETED
+    - bump() now gated behind requestAnimationFrame flag
+    - One render per frame max during brush strokes
+    - Commit: 6e13d76
+
+
+================================================================================
+PHASE 4 — ARCHITECTURE                                 COMPLETED P4A
+================================================================================
+
+4A. Decompose PixelForge.jsx                                   COMPLETED
+    - Created src/hooks/useToolSelection.js (~118 lines)
+    - Created src/hooks/useDerivedState.js (~240 lines)
+    - PixelForge.jsx shrunk significantly
+    - Commits: 31a2927, 0527973
+
+4B. Extract more inline functions to useCallback               PARTIAL
+    - Top-level functions in useToolSelection are memoized
+    - Remaining: commitColor, applyPrimaryColor, control-tx helpers
+
+
+================================================================================
+PHASE 5 — TEST FAILURES                                COMPLETED
+================================================================================
+
+5A. Fix 5 pre-existing test failures                           COMPLETED
+    - localStorage shim in setup.js (jsdom mock was broken)
+    - Pixel-buffer-backed canvas shim (vitest-canvas-mock returns zeros)
+    - MockImage with queueMicrotask onload (jsdom doesn't fire for data: URLs)
+    - useEditorPrefs hydration race fix (loadedFromStorage guard)
+    - Result: 69/69 tests passing
+    - Commit: 24859ab
+
+
+================================================================================
+PRIORITY SUMMARY
+================================================================================
+
+Phase   Description                     Status       Effort    Impact
+------+---------------------------------+------------+---------+--------
+  1A    Fix test infrastructure          COMPLETED    —         Critical
+  1B    Add eslint-plugin-react          COMPLETED    —         High
+  1C    Suppress 7 false-positive lints  COMPLETED    —         Medium
+  2A    structuredClone in cloneShape    COMPLETED    —         Low
+  2B    Memoize keyboard deps            COMPLETED    —         Medium
+  3A    Throttle brush rAF               COMPLETED    —         Medium
+  4A    Decompose PixelForge.jsx         COMPLETED    —         Medium
+  4B    useCallback inline functions     PARTIAL      Small     Low
+  5A    Fix 5 pre-existing test fails    COMPLETED    —         Medium
