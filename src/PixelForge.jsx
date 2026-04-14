@@ -114,13 +114,21 @@ export default function PixelForge() {
   const feedbackTimer = useRef(null);
   const fieldFeedbackTimer = useRef(null);
   const controlTxRef = useRef(null);
+  const bumpScheduledRef = useRef(false);
 
   const flash = useCallback((message, tone = "info", ms = 2000) => {
     setToast({ message, tone });
     window.clearTimeout(newToast.current);
     newToast.current = window.setTimeout(() => setToast(null), ms);
   }, []);
-  const bump = () => setTick(t => t + 1);
+  const bump = useCallback(() => {
+    if (bumpScheduledRef.current) return;
+    bumpScheduledRef.current = true;
+    requestAnimationFrame(() => {
+      bumpScheduledRef.current = false;
+      setTick(t => t + 1);
+    });
+  }, []);
   const markDirty = useCallback(() => {
     setIsDirty(true);
     setDocVersion(v => v + 1);
@@ -142,7 +150,7 @@ export default function PixelForge() {
   const syncEditor = useCallback(() => {
     syncMeta();
     bump();
-  }, [syncMeta]);
+  }, [bump, syncMeta]);
 
   const getLayer = useCallback((id) => doc.current.layers[id] || null, []);
   const findShapeRecord = useCallback((selection = selectedShape) => {
@@ -243,6 +251,26 @@ export default function PixelForge() {
   });
   const preferredRasterTool = getToolRequirement(prefs.toolPrefs.lastRasterTool) === "raster" ? prefs.toolPrefs.lastRasterTool : "brush";
   const preferredVectorTool = getToolRequirement(prefs.toolPrefs.lastVectorTool) === "vector" ? prefs.toolPrefs.lastVectorTool : "rect";
+
+  const pulseLayer = useCallback((id, tone = "suggested", ms = 180) => {
+    if (!id) return;
+    if (tone === "suggested" && !prefs.behaviorPrefs.highlightLikelyLayer) return;
+    setIntentLayerId(id);
+    setIntentLayerTone(tone);
+    window.clearTimeout(intentLayerTimer.current);
+    intentLayerTimer.current = window.setTimeout(() => {
+      setIntentLayerId(null);
+      setIntentLayerTone("suggested");
+    }, ms);
+  }, [prefs.behaviorPrefs.highlightLikelyLayer]);
+
+  const canEditLayer = useCallback((layer, actionLabel = "edit") => {
+    if (!layer) return false;
+    if (!layer.locked) return true;
+    pulseLayer(layer.id, "error");
+    flash(`${layer.name} is locked. Unlock it to ${actionLabel}.`, "error");
+    return false;
+  }, [flash, pulseLayer]);
 
   const {
     recoveryDraft,
@@ -499,11 +527,11 @@ export default function PixelForge() {
     triggerFeedback("color-secondary", "success", 140);
   }
 
-  function swapColors() {
+  const swapColors = useCallback(() => {
     setColor1(color2);
     setColor2(color1);
     triggerFeedback("swap-colors", "success", 140);
-  }
+  }, [color1, color2, triggerFeedback]);
 
   /* ─── Init ─── */
   useEffect(() => {
@@ -540,7 +568,7 @@ export default function PixelForge() {
     const obs = new ResizeObserver(() => bump());
     if (vpRef.current) obs.observe(vpRef.current);
     return () => obs.disconnect();
-  }, []);
+  }, [bump]);
 
   /* ─── Undo / Redo ─── */
   function handleUndo() {
@@ -562,27 +590,8 @@ export default function PixelForge() {
   }
 
   /* ─── Brush drawing ─── */
-  function canEditLayer(layer, actionLabel = "edit") {
-    if (!layer) return false;
-    if (!layer.locked) return true;
-    pulseLayer(layer.id, "error");
-    flash(`${layer.name} is locked. Unlock it to ${actionLabel}.`, "error");
-    return false;
-  }
 
-  function pulseLayer(id, tone = "suggested", ms = 180) {
-    if (!id) return;
-    if (tone === "suggested" && !prefs.behaviorPrefs.highlightLikelyLayer) return;
-    setIntentLayerId(id);
-    setIntentLayerTone(tone);
-    window.clearTimeout(intentLayerTimer.current);
-    intentLayerTimer.current = window.setTimeout(() => {
-      setIntentLayerId(null);
-      setIntentLayerTone("suggested");
-    }, ms);
-  }
-
-  function pickLikelyLayerId(type, { includeLocked = false } = {}) {
+  const pickLikelyLayerId = useCallback((type, { includeLocked = false } = {}) => {
     const seen = new Set();
     const ordered = [];
     const pushCandidate = (id) => {
@@ -596,24 +605,39 @@ export default function PixelForge() {
     pushCandidate(lastLayerByType[type]);
     pushCandidate(activeId);
     [...layers].reverse().forEach(l => pushCandidate(l.id));
-    if (!ordered.length && !includeLocked) return pickLikelyLayerId(type, { includeLocked: true });
+    if (!ordered.length && !includeLocked) {
+      // Retry including locked layers.
+      const fallbackSeen = new Set();
+      const fallbackOrdered = [];
+      const fallbackPush = (id) => {
+        if (!id || fallbackSeen.has(id)) return;
+        const layer = layers.find(l => l.id === id);
+        if (!layer || layer.type !== type) return;
+        fallbackSeen.add(id);
+        fallbackOrdered.push(id);
+      };
+      fallbackPush(lastLayerByType[type]);
+      fallbackPush(activeId);
+      [...layers].reverse().forEach(l => fallbackPush(l.id));
+      return fallbackOrdered[0] || null;
+    }
     return ordered[0] || null;
-  }
+  }, [activeId, lastLayerByType, layers]);
 
-  function focusLayerId(id, { pulse = true } = {}) {
+  const focusLayerId = useCallback((id, { pulse = true } = {}) => {
     if (!id || !layers.some(l => l.id === id)) return null;
     setActiveId(id);
     if (pulse) pulseLayer(id, "suggested");
     return id;
-  }
+  }, [layers, pulseLayer]);
 
-  function focusLayerType(type, options = {}) {
+  const focusLayerType = useCallback((type, options = {}) => {
     const id = pickLikelyLayerId(type);
     if (!id) return null;
     return focusLayerId(id, options);
-  }
+  }, [focusLayerId, pickLikelyLayerId]);
 
-  function selectTool(nextTool) {
+  const selectTool = useCallback((nextTool) => {
     setTool(nextTool);
     triggerFeedback(`tool-${nextTool}`, "success", 140);
     const requiredType = getToolRequirement(nextTool);
@@ -629,7 +653,7 @@ export default function PixelForge() {
     if (isCompactUI && nextTool !== "move" && nextTool !== "eyedropper") {
       setMobilePanelTab("tool");
     }
-  }
+  }, [activeId, focusLayerType, isCompactUI, layers, prefs.behaviorPrefs.autoSwitchLayerForTool, triggerFeedback, updatePrefs]);
 
 
   function beginControlTx(layerId) {
@@ -727,7 +751,7 @@ export default function PixelForge() {
     };
   }
 
-  function duplicateSelectedShape() {
+  const duplicateSelectedShape = useCallback(() => {
     const record = findShapeRecord();
     if (!record || !canEditLayer(record.layer, "duplicate this shape")) return;
     const before = capturePatchSnapshot([record.layer.id], true);
@@ -737,9 +761,9 @@ export default function PixelForge() {
     setSelectedShape(nextSelection);
     commitPatchHistory(before, [record.layer.id], { selectedShape: nextSelection });
     triggerFeedback("shape-duplicate", "success");
-  }
+  }, [canEditLayer, capturePatchSnapshot, commitPatchHistory, findShapeRecord, triggerFeedback]);
 
-  function deleteSelectedShape() {
+  const deleteSelectedShape = useCallback(() => {
     const record = findShapeRecord();
     if (!record || !canEditLayer(record.layer, "delete this shape")) return;
     const before = capturePatchSnapshot([record.layer.id], true);
@@ -747,7 +771,7 @@ export default function PixelForge() {
     setSelectedShape(null);
     commitPatchHistory(before, [record.layer.id], { selectedShape: null });
     triggerFeedback("shape-delete", "success");
-  }
+  }, [canEditLayer, capturePatchSnapshot, commitPatchHistory, findShapeRecord, triggerFeedback]);
 
   /* ─── Keyboard ─── */
   useEffect(() => {
@@ -779,7 +803,7 @@ export default function PixelForge() {
     const ku = (e) => { if (e.code === "Space") space.current = false; };
     window.addEventListener("keydown", kd); window.addEventListener("keyup", ku);
     return () => { window.removeEventListener("keydown", kd); window.removeEventListener("keyup", ku); };
-  }, [clearSelection, deleteSelectedShape, duplicateActiveLayer, duplicateSelectedShape, handleSave, selectedShape, swapColors]);
+  }, [clearSelection, deleteSelectedShape, duplicateActiveLayer, duplicateSelectedShape, handleSave, selectTool, selectedShape, swapColors]);
 
   function commitActiveLayerName() {
     if (!activeId) return;
