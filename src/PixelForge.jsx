@@ -15,6 +15,7 @@ import useHistory from "./hooks/useHistory.js";
 import useLayerOps from "./hooks/useLayerOps.js";
 import useDocumentController from "./hooks/useDocumentController.js";
 import useCanvasInteractions from "./hooks/useCanvasInteractions.js";
+import useToolSelection from "./hooks/useToolSelection.js";
 
 import {
   DEFAULT_W, DEFAULT_H, MIN_ZOOM, MAX_ZOOM,
@@ -63,9 +64,6 @@ export default function PixelForge() {
   const [dragLayerId, setDragLayerId] = useState(null);
   const [mobilePanelTab, setMobilePanelTab] = useState("next");
   const [isCompactUI, setIsCompactUI] = useState(false);
-  const [intentLayerId, setIntentLayerId] = useState(null);
-  const [intentLayerTone, setIntentLayerTone] = useState("suggested");
-  const [lastLayerByType, setLastLayerByType] = useState({ raster: null, vector: null });
   const [starterDismissed, setStarterDismissed] = useState(false);
   const [feedbackState, setFeedbackState] = useState({ scope: null, tone: "idle" });
   const [fieldFeedback, setFieldFeedback] = useState({ field: null, tone: "idle" });
@@ -110,7 +108,6 @@ export default function PixelForge() {
   const panning = useRef(false);
   const panSt = useRef({ x: 0, y: 0, ox: 0, oy: 0 });
   const raf = useRef(null);
-  const intentLayerTimer = useRef(null);
   const feedbackTimer = useRef(null);
   const fieldFeedbackTimer = useRef(null);
   const controlTxRef = useRef(null);
@@ -252,17 +249,25 @@ export default function PixelForge() {
   const preferredRasterTool = getToolRequirement(prefs.toolPrefs.lastRasterTool) === "raster" ? prefs.toolPrefs.lastRasterTool : "brush";
   const preferredVectorTool = getToolRequirement(prefs.toolPrefs.lastVectorTool) === "vector" ? prefs.toolPrefs.lastVectorTool : "rect";
 
-  const pulseLayer = useCallback((id, tone = "suggested", ms = 180) => {
-    if (!id) return;
-    if (tone === "suggested" && !prefs.behaviorPrefs.highlightLikelyLayer) return;
-    setIntentLayerId(id);
-    setIntentLayerTone(tone);
-    window.clearTimeout(intentLayerTimer.current);
-    intentLayerTimer.current = window.setTimeout(() => {
-      setIntentLayerId(null);
-      setIntentLayerTone("suggested");
-    }, ms);
-  }, [prefs.behaviorPrefs.highlightLikelyLayer]);
+  const {
+    selectTool,
+    focusLayerId,
+    focusLayerType,
+    pickLikelyLayerId,
+    pulseLayer,
+    intentLayerId,
+    intentLayerTone,
+  } = useToolSelection({
+    layers,
+    activeId,
+    isCompactUI,
+    prefs,
+    setActiveId,
+    setTool,
+    setMobilePanelTab,
+    updatePrefs,
+    triggerFeedback,
+  });
 
   const canEditLayer = useCallback((layer, actionLabel = "edit") => {
     if (!layer) return false;
@@ -455,7 +460,6 @@ export default function PixelForge() {
     setOpacityDraft(current ? Math.round(current.opacity * 100) : null);
   }, [activeId, layers]);
   useEffect(() => () => window.clearTimeout(newToast.current), []);
-  useEffect(() => () => window.clearTimeout(intentLayerTimer.current), []);
   useEffect(() => () => window.clearTimeout(feedbackTimer.current), []);
   useEffect(() => () => window.clearTimeout(fieldFeedbackTimer.current), []);
 
@@ -590,71 +594,6 @@ export default function PixelForge() {
   }
 
   /* ─── Brush drawing ─── */
-
-  const pickLikelyLayerId = useCallback((type, { includeLocked = false } = {}) => {
-    const seen = new Set();
-    const ordered = [];
-    const pushCandidate = (id) => {
-      if (!id || seen.has(id)) return;
-      const layer = layers.find(l => l.id === id);
-      if (!layer || layer.type !== type) return;
-      if (!includeLocked && layer.locked) return;
-      seen.add(id);
-      ordered.push(id);
-    };
-    pushCandidate(lastLayerByType[type]);
-    pushCandidate(activeId);
-    [...layers].reverse().forEach(l => pushCandidate(l.id));
-    if (!ordered.length && !includeLocked) {
-      // Retry including locked layers.
-      const fallbackSeen = new Set();
-      const fallbackOrdered = [];
-      const fallbackPush = (id) => {
-        if (!id || fallbackSeen.has(id)) return;
-        const layer = layers.find(l => l.id === id);
-        if (!layer || layer.type !== type) return;
-        fallbackSeen.add(id);
-        fallbackOrdered.push(id);
-      };
-      fallbackPush(lastLayerByType[type]);
-      fallbackPush(activeId);
-      [...layers].reverse().forEach(l => fallbackPush(l.id));
-      return fallbackOrdered[0] || null;
-    }
-    return ordered[0] || null;
-  }, [activeId, lastLayerByType, layers]);
-
-  const focusLayerId = useCallback((id, { pulse = true } = {}) => {
-    if (!id || !layers.some(l => l.id === id)) return null;
-    setActiveId(id);
-    if (pulse) pulseLayer(id, "suggested");
-    return id;
-  }, [layers, pulseLayer]);
-
-  const focusLayerType = useCallback((type, options = {}) => {
-    const id = pickLikelyLayerId(type);
-    if (!id) return null;
-    return focusLayerId(id, options);
-  }, [focusLayerId, pickLikelyLayerId]);
-
-  const selectTool = useCallback((nextTool) => {
-    setTool(nextTool);
-    triggerFeedback(`tool-${nextTool}`, "success", 140);
-    const requiredType = getToolRequirement(nextTool);
-    if (requiredType === "raster") {
-      updatePrefs(prev => mergePrefs(prev, { toolPrefs: { lastRasterTool: nextTool } }));
-    } else if (requiredType === "vector") {
-      updatePrefs(prev => mergePrefs(prev, { toolPrefs: { lastVectorTool: nextTool } }));
-    }
-    if (prefs.behaviorPrefs.autoSwitchLayerForTool && requiredType) {
-      const current = layers.find(l => l.id === activeId);
-      if (!current || current.type !== requiredType) focusLayerType(requiredType);
-    }
-    if (isCompactUI && nextTool !== "move" && nextTool !== "eyedropper") {
-      setMobilePanelTab("tool");
-    }
-  }, [activeId, focusLayerType, isCompactUI, layers, prefs.behaviorPrefs.autoSwitchLayerForTool, triggerFeedback, updatePrefs]);
-
 
   function beginControlTx(layerId) {
     controlTxRef.current = { layerId, snapshot: capturePatchSnapshot([layerId], true), dirty: false };
@@ -1003,12 +942,6 @@ export default function PixelForge() {
   const showNextSection = visibleNextActions.length > 0;
   const showStarterOverlay = isBlankDocument && prefs.behaviorPrefs.showStarterActions && !modal && !starterDismissed;
   const showDesktopSection = (section) => !isCompactUI || mobilePanelTab === section;
-
-  useEffect(() => {
-    const current = layers.find(l => l.id === activeId);
-    if (!current?.type) return;
-    setLastLayerByType(prev => prev[current.type] === current.id ? prev : { ...prev, [current.type]: current.id });
-  }, [activeId, layers]);
 
   useEffect(() => {
     if (!isCompactUI) return;
