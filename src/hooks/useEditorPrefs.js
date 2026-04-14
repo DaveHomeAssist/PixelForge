@@ -8,10 +8,11 @@ import { mergePrefs, pushRecentValue } from "../utils.js";
 function loadPrefs() {
   try {
     const raw = window.localStorage.getItem(PREFS_KEY);
-    return raw ? mergePrefs(DEFAULT_PREFS, JSON.parse(raw)) : DEFAULT_PREFS;
+    if (!raw) return { prefs: DEFAULT_PREFS, loadedFromStorage: false };
+    return { prefs: mergePrefs(DEFAULT_PREFS, JSON.parse(raw)), loadedFromStorage: true };
   } catch {
     window.localStorage.removeItem(PREFS_KEY);
-    return DEFAULT_PREFS;
+    return { prefs: DEFAULT_PREFS, loadedFromStorage: false };
   }
 }
 
@@ -44,9 +45,16 @@ export default function useEditorPrefs({
   setResizeForm,
   setMobilePanelTab,
 }) {
-  const [prefs, setPrefs] = useState(loadPrefs);
+  const [{ prefs, loadedFromStorage }, setPrefsState] = useState(loadPrefs);
   const hydratedRef = useRef(false);
   const latestPrefsRef = useRef(prefs);
+  const loadedFromStorageRef = useRef(loadedFromStorage);
+  const setPrefs = useCallback((updater) => {
+    setPrefsState((state) => {
+      const nextPrefs = typeof updater === "function" ? updater(state.prefs) : updater;
+      return { ...state, prefs: nextPrefs };
+    });
+  }, []);
 
   const updatePrefs = useCallback((updater) => {
     setPrefs(prev => {
@@ -54,7 +62,7 @@ export default function useEditorPrefs({
       latestPrefsRef.current = next;
       return next;
     });
-  }, []);
+  }, [setPrefs]);
 
   // Hydrate editor state from stored prefs on mount
   useEffect(() => {
@@ -94,9 +102,36 @@ export default function useEditorPrefs({
 
   // Sync editor values back to prefs — derived computation, not setState in effect.
   // Uses a ref to track previous values and only calls updatePrefs when needed.
-  const prevSyncRef = useRef({});
+  // On the first run after hydration, seed prevSyncRef from the *loaded* prefs
+  // rather than the incoming props so that the parent's pre-hydration values
+  // don't immediately clobber what we just loaded from storage.
+  const prevSyncRef = useRef(null);
   useEffect(() => {
     if (!hydratedRef.current) return;
+    if (prevSyncRef.current === null) {
+      // If prefs came from storage, seed from loaded values and skip this run
+      // so the parent has a chance to reconcile its state via the setters we
+      // just invoked. If no stored prefs, treat incoming props as truth and
+      // persist them immediately.
+      if (loadedFromStorageRef.current) {
+        const loaded = latestPrefsRef.current;
+        const loadedBrushSize = loaded.toolPrefs.brushSize ?? brushSize;
+        prevSyncRef.current = {
+          brushSize: loadedBrushSize,
+          brushOpacity: loaded.toolPrefs.brushOpacity ?? brushOpacity,
+          strokeW: loaded.toolPrefs.strokeWidth ?? strokeW,
+          fillOn: loaded.toolPrefs.fillOn ?? fillOn,
+          strokeOn: loaded.toolPrefs.strokeOn ?? strokeOn,
+          color1: loaded.toolPrefs.recentColors?.[0] ?? color1,
+          color2: loaded.toolPrefs.recentColors?.[1] ?? color2,
+          tool,
+          mobilePanelTab: loaded.uiPrefs.mobileTab ?? mobilePanelTab,
+          brushSizeTool: loadedBrushSize,
+        };
+        return;
+      }
+      prevSyncRef.current = {};
+    }
     const prev = prevSyncRef.current;
     const changed =
       prev.brushSize !== brushSize ||
