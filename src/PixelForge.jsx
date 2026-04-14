@@ -560,6 +560,11 @@ export default function PixelForge() {
       screenPoint: { x: ts.current.scrX, y: ts.current.scrY },
       isPanning: panning.current,
     });
+    // `tick` is intentionally included below: doc is a ref (doc.current), so the
+    // linter cannot see it as a dependency. `tick` is bumped whenever the doc
+    // mutates, forcing this callback to re-create and the downstream effect to
+    // re-run requestAnimationFrame with fresh doc state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [brushSize, docH, docW, findShapeRecord, pan, tick, tool, zoom]);
 
   useEffect(() => {
@@ -575,13 +580,13 @@ export default function PixelForge() {
   }, [bump]);
 
   /* ─── Undo / Redo ─── */
-  function handleUndo() {
+  const handleUndo = useCallback(() => {
     if (doUndo()) triggerFeedback("undo", "success", 140);
-  }
+  }, [doUndo, triggerFeedback]);
 
-  function handleRedo() {
+  const handleRedo = useCallback(() => {
     if (doRedo()) triggerFeedback("redo", "success", 140);
-  }
+  }, [doRedo, triggerFeedback]);
 
   function zoomIn() {
     setZoom(z => clamp(z * 1.25, MIN_ZOOM, MAX_ZOOM));
@@ -742,7 +747,7 @@ export default function PixelForge() {
     const ku = (e) => { if (e.code === "Space") space.current = false; };
     window.addEventListener("keydown", kd); window.addEventListener("keyup", ku);
     return () => { window.removeEventListener("keydown", kd); window.removeEventListener("keyup", ku); };
-  }, [clearSelection, deleteSelectedShape, duplicateActiveLayer, duplicateSelectedShape, handleSave, selectTool, selectedShape, swapColors]);
+  }, [clearSelection, deleteSelectedShape, duplicateActiveLayer, duplicateSelectedShape, handleRedo, handleSave, handleUndo, selectTool, selectedShape, swapColors]);
 
   function commitActiveLayerName() {
     if (!activeId) return;
