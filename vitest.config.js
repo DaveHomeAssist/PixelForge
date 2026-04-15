@@ -7,10 +7,8 @@ export default defineConfig({
     setupFiles: ["./src/__tests__/jest-shim.js", "./src/__tests__/setup.js"],
     fileParallelism: false,
     pool: "forks",
-    poolOptions: {
-      forks: {
-        singleFork: true,
-      },
+    forks: {
+      singleFork: true,
     },
     testTimeout: 10000,
     hookTimeout: 10000,
