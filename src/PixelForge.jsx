@@ -439,14 +439,18 @@ export default function PixelForge() {
     triggerFeedback,
   });
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- mirrors color1 prop into a separate "editing draft" input. Phase 2 refactor target.
   useEffect(() => { setColor1Input(color1); }, [color1]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- mirrors color2 prop into a separate "editing draft" input. Phase 2 refactor target.
   useEffect(() => { setColor2Input(color2); }, [color2]);
   useEffect(() => {
     const current = layers.find(layer => layer.id === activeId);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- seeds the layer-name text input from the active layer. Phase 2 refactor target.
     setLayerNameInput(current?.name || "");
   }, [activeId, layers]);
   useEffect(() => {
     if (!selectedShape) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- clears the selection draft when the selection is cleared. Phase 2 refactor target.
       setSelectionDraft(null);
       setSelectedShapeType(null);
       return;
@@ -457,6 +461,7 @@ export default function PixelForge() {
   }, [findShapeRecord, selectedShape, shapeToDraft]);
   useEffect(() => {
     const current = layers.find(layer => layer.id === activeId);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- seeds the opacity-slider draft from active-layer opacity. Phase 2 refactor target.
     setOpacityDraft(current ? Math.round(current.opacity * 100) : null);
   }, [activeId, layers]);
   useEffect(() => () => window.clearTimeout(newToast.current), []);
