@@ -5,7 +5,7 @@ import {
   HEX_COLOR_RE, RECENT_PRESETS_LIMIT,
 } from "../constants.js";
 import {
-  uid, clamp, makeCanvas, mergePrefs,
+  clamp, makeCanvas, mergePrefs,
   normalizeHexColor, pushRecentPreset, getAnchorOffset,
 } from "../utils.js";
 import { drawShape } from "../shapes.js";
@@ -13,6 +13,7 @@ import {
   createDefaultDocument, buildProjectPayload, hydrateProject, hydrateDraftPayload,
 } from "../serialization.js";
 import { saveProjectPayload, supportsFileSave } from "../projectFiles.js";
+import { createRasterLayerFromImage } from "../imageImport.js";
 
 export default function useDocumentController({
   docRef,
@@ -224,60 +225,51 @@ export default function useDocumentController({
     importRef.current?.click();
   }, [importRef]);
 
-  const onImportImageChange = useCallback(async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    let imageUrl = null;
+  const importImageFile = useCallback(async (file, { name, at } = {}) => {
+    const layerName = name || file.name?.replace(/\.[^.]+$/, "") || "Imported Image";
     try {
-      imageUrl = URL.createObjectURL(file);
-      const image = new window.Image();
-      await new Promise((resolve, reject) => {
-        image.onload = resolve;
-        image.onerror = reject;
-        image.src = imageUrl;
-      });
-
-      withFullHistory(() => {
-        const scale = Math.min(docW / image.width, docH / image.height, 1);
-        const drawW = Math.max(1, Math.round(image.width * scale));
-        const drawH = Math.max(1, Math.round(image.height * scale));
-        const layer = {
-          id: uid(),
-          name: file.name.replace(/\.[^.]+$/, "") || "Imported Image",
-          type: "raster",
-          visible: true,
-          opacity: 1,
-          blend: "source-over",
-          locked: false,
-          contentHint: "image",
-          canvas: makeCanvas(docW, docH),
-          ox: 0,
-          oy: 0,
-        };
-        const ctx = layer.canvas.getContext("2d");
-        ctx.drawImage(
-          image,
-          Math.round((docW - drawW) / 2),
-          Math.round((docH - drawH) / 2),
-          drawW,
-          drawH,
-        );
-        docRef.current.layers[layer.id] = layer;
-        docRef.current.order.push(layer.id);
-        setActiveId(layer.id);
-        setSelectedShape(null);
-        return { activeId: layer.id, selectedShape: null };
+      await createRasterLayerFromImage(file, {
+        docRef, docW, docH,
+        withFullHistory, setActiveId, setSelectedShape,
+        name: layerName,
+        at,
       });
       triggerFeedback("import", "success");
-      flash("Imported " + file.name, "success");
+      flash("Imported " + (file.name || layerName), "success");
+      return true;
     } catch (err) {
       triggerFeedback("import", "error");
       flash("Import error: " + err.message, "error");
-    } finally {
-      if (imageUrl) URL.revokeObjectURL(imageUrl);
+      return false;
     }
-    event.target.value = "";
   }, [docH, docRef, docW, flash, setActiveId, setSelectedShape, triggerFeedback, withFullHistory]);
+
+  const onImportImageChange = useCallback(async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    await importImageFile(file);
+    event.target.value = "";
+  }, [importImageFile]);
+
+  const handleViewportDrop = useCallback(async (files) => {
+    const images = (files || []).filter(f => f && f.type && f.type.startsWith("image/"));
+    if (!images.length) {
+      if ((files || []).length) {
+        triggerFeedback("import", "error");
+        flash("Drop an image file", "error");
+      }
+      return;
+    }
+    for (const file of images) {
+      // sequential — each image gets its own history entry
+      await importImageFile(file);
+    }
+  }, [flash, importImageFile, triggerFeedback]);
+
+  const handleClipboardPaste = useCallback(async (file) => {
+    if (!file) return false;
+    return importImageFile(file, { name: "Pasted Image" });
+  }, [importImageFile]);
 
   const applyResizeCanvas = useCallback(() => {
     const nextW = clamp(Math.round(+resizeForm.width || docW), 64, 8192);
@@ -454,6 +446,8 @@ export default function useDocumentController({
     onFileChange,
     handleImportImage,
     onImportImageChange,
+    handleViewportDrop,
+    handleClipboardPaste,
     applyResizeCanvas,
     applyNewDocument,
     recoverDraftProject,

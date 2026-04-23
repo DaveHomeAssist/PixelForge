@@ -1,3 +1,5 @@
+import { BRUSH_PRESETS } from "../brushes.js";
+
 export default function ToolSettingsSection({
   panelToolCopy,
   panelToolMeta,
@@ -13,6 +15,8 @@ export default function ToolSettingsSection({
   brushSize,
   brushOpacity,
   setBrushOpacity,
+  brushPreset,
+  setBrushPreset,
   fillOn,
   setFillOn,
   strokeOn,
@@ -56,6 +60,21 @@ export default function ToolSettingsSection({
 
         {["brush", "eraser"].includes(tool) && (
           <>
+            <div className="pf-brush-presets" role="group" aria-label="Brush preset">
+              {BRUSH_PRESETS.map(preset => (
+                <button
+                  key={preset.id}
+                  className={`pf-chip-btn ${brushPreset === preset.id ? "active" : ""}`}
+                  onClick={() => setBrushPreset(preset.id)}
+                  aria-pressed={brushPreset === preset.id}
+                  aria-label={`${preset.label} brush`}
+                  title={preset.label}
+                >
+                  <span aria-hidden="true" style={{ marginRight: 4 }}>{preset.symbol}</span>
+                  {preset.label}
+                </button>
+              ))}
+            </div>
             {recentBrushSizes.length > 0 && (
               <div className="pf-recent-row">
                 {recentBrushSizes.map(size => (

@@ -1,5 +1,5 @@
 import {
-  MousePointer2, Pencil, Eraser, Square, Circle, Minus, Pipette,
+  MousePointer2, Pencil, Eraser, Square, Circle, Minus, Pipette, Type, SquareDashed,
 } from "lucide-react";
 
 export const DEFAULT_W = 1200, DEFAULT_H = 800;
@@ -33,6 +33,7 @@ export const DEFAULT_PREFS = {
     lastVectorTool: "rect",
     brushSize: 10,
     brushOpacity: 1,
+    brushPreset: "soft",
     strokeWidth: 2,
     fillOn: true,
     strokeOn: true,
@@ -56,13 +57,15 @@ export const DEFAULT_PREFS = {
 };
 
 export const TOOLS = [
-  { id: "move", label: "Move", icon: MousePointer2, shortcut: "V", raster: true, vector: true },
-  { id: "brush", label: "Brush", icon: Pencil, shortcut: "B", raster: true, vector: false },
-  { id: "eraser", label: "Eraser", icon: Eraser, shortcut: "E", raster: true, vector: false },
-  { id: "rect", label: "Rectangle", icon: Square, shortcut: "R", raster: false, vector: true },
-  { id: "ellipse", label: "Ellipse", icon: Circle, shortcut: "O", raster: false, vector: true },
-  { id: "line", label: "Line", icon: Minus, shortcut: "L", raster: false, vector: true },
-  { id: "eyedropper", label: "Eyedropper", icon: Pipette, shortcut: "I", raster: true, vector: true },
+  { id: "move", label: "Move", icon: MousePointer2, shortcut: "V", raster: true, vector: true, text: true },
+  { id: "marquee", label: "Marquee Select", icon: SquareDashed, shortcut: "M", raster: true, vector: false, text: false },
+  { id: "brush", label: "Brush", icon: Pencil, shortcut: "B", raster: true, vector: false, text: false },
+  { id: "eraser", label: "Eraser", icon: Eraser, shortcut: "E", raster: true, vector: false, text: false },
+  { id: "rect", label: "Rectangle", icon: Square, shortcut: "R", raster: false, vector: true, text: false },
+  { id: "ellipse", label: "Ellipse", icon: Circle, shortcut: "O", raster: false, vector: true, text: false },
+  { id: "line", label: "Line", icon: Minus, shortcut: "L", raster: false, vector: true, text: false },
+  { id: "text", label: "Text", icon: Type, shortcut: "T", raster: false, vector: false, text: true },
+  { id: "eyedropper", label: "Eyedropper", icon: Pipette, shortcut: "I", raster: true, vector: true, text: true },
 ];
 
 export const BLENDS = [
@@ -108,6 +111,16 @@ export const TOOL_COPY = {
     title: "Line",
     description: "Create direct vector strokes for guides, dividers, and layout scaffolding.",
     hint: "Secondary stroke width applies to each line segment.",
+  },
+  marquee: {
+    title: "Marquee",
+    description: "Drag a rectangle to select pixels. Cut, copy, paste, or drag to move the region.",
+    hint: "Ctrl+C copies, Ctrl+V pastes as a new layer, arrow keys nudge, Esc clears.",
+  },
+  text: {
+    title: "Text",
+    description: "Place editable type layers on the canvas with font, weight, and color controls.",
+    hint: "Click to place. Press Enter to commit, Esc to cancel.",
   },
   eyedropper: {
     title: "Eyedropper",

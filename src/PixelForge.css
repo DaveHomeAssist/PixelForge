@@ -314,6 +314,11 @@
   border-radius: 22px;
   border: 1px solid rgba(255,255,255,0.34);
   pointer-events: none;
+  transition: border-color 120ms ease, border-width 120ms ease;
+}
+.pf-viewport.pf-viewport-drag-hover::before {
+  border: 2px dashed rgba(42,111,151,0.72);
+  background: rgba(42,111,151,0.05);
 }
 .pf-viewport canvas { display: block; position: absolute; top: 0; left: 0; }
 
@@ -479,6 +484,17 @@
   flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 12px;
+}
+.pf-brush-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.pf-brush-presets .pf-chip-btn.active {
+  background: var(--pf-accent, #2a6f97);
+  color: #ffffff;
+  border-color: var(--pf-accent, #2a6f97);
 }
 .pf-chip-btn {
   min-height: 30px;

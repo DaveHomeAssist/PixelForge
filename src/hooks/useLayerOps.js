@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { uid, cloneShape, makeCanvas, reorderList } from "../utils.js";
+import { DEFAULT_TEXT_LAYER } from "../text.js";
 
 function duplicateShapeOffset(shape) {
   if (shape.type === "line") {
@@ -34,17 +35,60 @@ export default function useLayerOps({
   const addLayer = useCallback((type) => {
     withFullHistory(() => {
       const d = docRef.current;
-      const layer = type === "raster"
-        ? { id: uid(), name: "Layer " + (d.order.length + 1), type: "raster", visible: true, opacity: 1, blend: "source-over", locked: false, contentHint: "empty", canvas: makeCanvas(docW, docH), ox: 0, oy: 0 }
-        : { id: uid(), name: "Vector " + (d.order.length + 1), type: "vector", visible: true, opacity: 1, blend: "source-over", locked: false, shapes: [], ox: 0, oy: 0 };
+      const base = { id: uid(), visible: true, opacity: 1, blend: "source-over", locked: false, ox: 0, oy: 0 };
+      let layer;
+      if (type === "raster") {
+        layer = { ...base, name: "Layer " + (d.order.length + 1), type: "raster", contentHint: "empty", canvas: makeCanvas(docW, docH) };
+      } else if (type === "text") {
+        layer = { ...base, name: "Text " + (d.order.length + 1), type: "text", ...DEFAULT_TEXT_LAYER };
+      } else {
+        layer = { ...base, name: "Vector " + (d.order.length + 1), type: "vector", shapes: [] };
+      }
       d.layers[layer.id] = layer;
       d.order.push(layer.id);
       setActiveId(layer.id);
       setSelectedShape(null);
       return { activeId: layer.id, selectedShape: null };
     });
-    triggerFeedback(type === "raster" ? "layer-add-raster" : "layer-add-vector", "success");
+    const feedbackKey = type === "raster" ? "layer-add-raster"
+      : type === "text" ? "layer-add-text"
+      : "layer-add-vector";
+    triggerFeedback(feedbackKey, "success");
   }, [docH, docRef, docW, setActiveId, setSelectedShape, triggerFeedback, withFullHistory]);
+
+  const addTextLayerAt = useCallback((at) => {
+    let newId = null;
+    withFullHistory(() => {
+      const d = docRef.current;
+      const layer = {
+        id: uid(),
+        name: "Text " + (d.order.length + 1),
+        type: "text",
+        visible: true,
+        opacity: 1,
+        blend: "source-over",
+        locked: false,
+        ox: Math.round(at?.x || 0),
+        oy: Math.round(at?.y || 0),
+        ...DEFAULT_TEXT_LAYER,
+      };
+      d.layers[layer.id] = layer;
+      d.order.push(layer.id);
+      setActiveId(layer.id);
+      setSelectedShape(null);
+      newId = layer.id;
+      return { activeId: layer.id, selectedShape: null };
+    });
+    return newId;
+  }, [docRef, setActiveId, setSelectedShape, withFullHistory]);
+
+  const updateTextLayer = useCallback((id, partial) => {
+    const layer = getLayer(id);
+    if (!layer || layer.type !== "text") return;
+    const before = capturePatchSnapshot([id], true);
+    Object.assign(layer, partial);
+    commitPatchHistory(before, [id], { selectedShape });
+  }, [capturePatchSnapshot, commitPatchHistory, getLayer, selectedShape]);
 
   const delLayer = useCallback((id) => {
     const d = docRef.current;
@@ -107,32 +151,44 @@ export default function useLayerOps({
     if (!layer) return;
     withFullHistory(() => {
       const copyId = uid();
-      const duplicate = layer.type === "raster"
-        ? {
-          id: copyId,
-          name: `${layer.name} Copy`,
+      const baseCopy = {
+        id: copyId,
+        name: `${layer.name} Copy`,
+        visible: layer.visible,
+        opacity: layer.opacity,
+        blend: layer.blend,
+        locked: false,
+        ox: layer.ox + 12,
+        oy: layer.oy + 12,
+      };
+      let duplicate;
+      if (layer.type === "raster") {
+        duplicate = {
+          ...baseCopy,
           type: "raster",
-          visible: layer.visible,
-          opacity: layer.opacity,
-          blend: layer.blend,
-          locked: false,
           contentHint: layer.contentHint || "edited",
           canvas: makeCanvas(docW, docH),
-          ox: layer.ox + 12,
-          oy: layer.oy + 12,
-        }
-        : {
-          id: copyId,
-          name: `${layer.name} Copy`,
-          type: "vector",
-          visible: layer.visible,
-          opacity: layer.opacity,
-          blend: layer.blend,
-          locked: false,
-          shapes: layer.shapes.map(duplicateShapeOffset),
-          ox: layer.ox + 12,
-          oy: layer.oy + 12,
         };
+      } else if (layer.type === "text") {
+        duplicate = {
+          ...baseCopy,
+          type: "text",
+          text: layer.text,
+          fontFamily: layer.fontFamily,
+          fontSize: layer.fontSize,
+          fontWeight: layer.fontWeight,
+          italic: layer.italic,
+          color: layer.color,
+          align: layer.align,
+          maxWidth: layer.maxWidth,
+        };
+      } else {
+        duplicate = {
+          ...baseCopy,
+          type: "vector",
+          shapes: layer.shapes.map(duplicateShapeOffset),
+        };
+      }
       if (duplicate.type === "raster") duplicate.canvas.getContext("2d").drawImage(layer.canvas, 0, 0);
       const index = docRef.current.order.indexOf(layer.id);
       docRef.current.layers[duplicate.id] = duplicate;
@@ -173,6 +229,8 @@ export default function useLayerOps({
 
   return {
     addLayer,
+    addTextLayerAt,
+    updateTextLayer,
     delLayer,
     moveLayer,
     reorderLayer,

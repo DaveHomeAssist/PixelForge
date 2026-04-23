@@ -48,12 +48,25 @@ export function serializeLayer(layer) {
   if (layer.type === "raster") {
     return { ...base, contentHint: layer.contentHint || "edited", data: layer.canvas.toDataURL("image/png") };
   }
+  if (layer.type === "text") {
+    return {
+      ...base,
+      text: layer.text,
+      fontFamily: layer.fontFamily,
+      fontSize: layer.fontSize,
+      fontWeight: layer.fontWeight,
+      italic: !!layer.italic,
+      color: layer.color,
+      align: layer.align,
+      maxWidth: layer.maxWidth,
+    };
+  }
   return { ...base, shapes: cloneShapes(layer.shapes) };
 }
 
 export function buildProjectPayload(editorDoc, docW, docH, activeId, selectedShape) {
   return {
-    v: 2,
+    v: 3,
     w: docW,
     h: docH,
     aid: activeId,
@@ -103,7 +116,7 @@ export async function buildDraftPayload(editorDoc, docW, docH, activeId, selecte
     };
   }));
   return {
-    v: 2,
+    v: 3,
     w: docW,
     h: docH,
     aid: activeId,
@@ -113,7 +126,7 @@ export async function buildDraftPayload(editorDoc, docW, docH, activeId, selecte
 }
 
 export async function hydrateProject(data) {
-  if (!data || !data.layers || (data.v !== 1 && data.v !== 2)) throw new Error("Bad format");
+  if (!data || !data.layers || (data.v !== 1 && data.v !== 2 && data.v !== 3)) throw new Error("Bad format");
   const width = data.w || DEFAULT_W;
   const height = data.h || DEFAULT_H;
   const nextDoc = { layers: {}, order: [] };
@@ -142,6 +155,31 @@ export async function hydrateProject(data) {
         });
         layer.canvas.getContext("2d").drawImage(img, 0, 0);
       }
+      nextDoc.layers[layer.id] = layer;
+      nextDoc.order.push(layer.id);
+      continue;
+    }
+
+    if (rawLayer.type === "text") {
+      const layer = {
+        id: rawLayer.id || uid(),
+        name: rawLayer.name || "Text",
+        type: "text",
+        visible: rawLayer.visible !== false,
+        opacity: rawLayer.opacity ?? 1,
+        blend: rawLayer.blend || "source-over",
+        locked: !!rawLayer.locked,
+        ox: rawLayer.ox || 0,
+        oy: rawLayer.oy || 0,
+        text: rawLayer.text ?? "",
+        fontFamily: rawLayer.fontFamily || "Inter, -apple-system, sans-serif",
+        fontSize: rawLayer.fontSize || 48,
+        fontWeight: rawLayer.fontWeight || 400,
+        italic: !!rawLayer.italic,
+        color: rawLayer.color || "#1b2a33",
+        align: rawLayer.align || "left",
+        maxWidth: rawLayer.maxWidth ?? null,
+      };
       nextDoc.layers[layer.id] = layer;
       nextDoc.order.push(layer.id);
       continue;
@@ -204,6 +242,27 @@ export function captureLayerSnapshot(layer) {
       imageData: layer.canvas.getContext("2d").getImageData(0, 0, layer.canvas.width, layer.canvas.height),
     };
   }
+  if (layer.type === "text") {
+    return {
+      id: layer.id,
+      name: layer.name,
+      type: "text",
+      visible: layer.visible,
+      opacity: layer.opacity,
+      blend: layer.blend,
+      locked: !!layer.locked,
+      ox: layer.ox,
+      oy: layer.oy,
+      text: layer.text,
+      fontFamily: layer.fontFamily,
+      fontSize: layer.fontSize,
+      fontWeight: layer.fontWeight,
+      italic: !!layer.italic,
+      color: layer.color,
+      align: layer.align,
+      maxWidth: layer.maxWidth,
+    };
+  }
   return {
     id: layer.id,
     name: layer.name,
@@ -234,6 +293,27 @@ export function restoreLayerSnapshot(layerSnapshot, width, height) {
       canvas,
       ox: layerSnapshot.ox,
       oy: layerSnapshot.oy,
+    };
+  }
+  if (layerSnapshot.type === "text") {
+    return {
+      id: layerSnapshot.id,
+      name: layerSnapshot.name,
+      type: "text",
+      visible: layerSnapshot.visible,
+      opacity: layerSnapshot.opacity,
+      blend: layerSnapshot.blend,
+      locked: !!layerSnapshot.locked,
+      ox: layerSnapshot.ox,
+      oy: layerSnapshot.oy,
+      text: layerSnapshot.text,
+      fontFamily: layerSnapshot.fontFamily,
+      fontSize: layerSnapshot.fontSize,
+      fontWeight: layerSnapshot.fontWeight,
+      italic: !!layerSnapshot.italic,
+      color: layerSnapshot.color,
+      align: layerSnapshot.align,
+      maxWidth: layerSnapshot.maxWidth,
     };
   }
   return {

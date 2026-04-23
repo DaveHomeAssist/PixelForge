@@ -5,6 +5,7 @@ import {
   createDefaultDocument, buildProjectPayload, hydrateDraftPayload,
 } from "../serialization.js";
 import { saveProjectPayload, supportsFileSave } from "../projectFiles.js";
+import { createRasterLayerFromImage } from "../imageImport.js";
 
 vi.mock("../serialization.js", () => ({
   createDefaultDocument: vi.fn(),
@@ -16,6 +17,10 @@ vi.mock("../serialization.js", () => ({
 vi.mock("../projectFiles.js", () => ({
   saveProjectPayload: vi.fn(),
   supportsFileSave: vi.fn(),
+}));
+
+vi.mock("../imageImport.js", () => ({
+  createRasterLayerFromImage: vi.fn(),
 }));
 
 function makeArgs(overrides = {}) {
@@ -197,5 +202,62 @@ describe("useDocumentController", () => {
     expect(args.viewportApi.fitViewTo).toHaveBeenCalledWith(640, 480);
     expect(args.feedbackApi.triggerFeedback).toHaveBeenCalledWith("recover", "success");
     expect(args.feedbackApi.flash).toHaveBeenCalledWith("Recovered autosaved draft", "success");
+  });
+
+  it("handleViewportDrop imports each image file sequentially", async () => {
+    const args = makeArgs();
+    createRasterLayerFromImage.mockResolvedValue("new-layer-id");
+    const file1 = new File([new Uint8Array([1])], "a.png", { type: "image/png" });
+    const file2 = new File([new Uint8Array([2])], "b.jpg", { type: "image/jpeg" });
+
+    const { result } = renderHook(() => useDocumentController(args));
+
+    await act(async () => {
+      await result.current.handleViewportDrop([file1, file2]);
+    });
+
+    expect(createRasterLayerFromImage).toHaveBeenCalledTimes(2);
+    expect(createRasterLayerFromImage).toHaveBeenNthCalledWith(1, file1, expect.objectContaining({ name: "a" }));
+    expect(createRasterLayerFromImage).toHaveBeenNthCalledWith(2, file2, expect.objectContaining({ name: "b" }));
+  });
+
+  it("handleViewportDrop filters non-image files and flashes an error when nothing is importable", async () => {
+    const args = makeArgs();
+    const textFile = new File(["hello"], "notes.txt", { type: "text/plain" });
+
+    const { result } = renderHook(() => useDocumentController(args));
+
+    await act(async () => {
+      await result.current.handleViewportDrop([textFile]);
+    });
+
+    expect(createRasterLayerFromImage).not.toHaveBeenCalled();
+    expect(args.feedbackApi.flash).toHaveBeenCalledWith("Drop an image file", "error");
+  });
+
+  it("handleViewportDrop with zero files is a no-op", async () => {
+    const args = makeArgs();
+    const { result } = renderHook(() => useDocumentController(args));
+
+    await act(async () => {
+      await result.current.handleViewportDrop([]);
+    });
+
+    expect(createRasterLayerFromImage).not.toHaveBeenCalled();
+    expect(args.feedbackApi.flash).not.toHaveBeenCalledWith("Drop an image file", "error");
+  });
+
+  it("handleClipboardPaste labels the layer 'Pasted Image'", async () => {
+    const args = makeArgs();
+    createRasterLayerFromImage.mockResolvedValue("paste-id");
+    const file = new File([new Uint8Array([1])], "clipboard.png", { type: "image/png" });
+
+    const { result } = renderHook(() => useDocumentController(args));
+
+    await act(async () => {
+      await result.current.handleClipboardPaste(file);
+    });
+
+    expect(createRasterLayerFromImage).toHaveBeenCalledWith(file, expect.objectContaining({ name: "Pasted Image" }));
   });
 });

@@ -68,8 +68,9 @@ export function pushRecentPreset(list, preset, limit = 4) {
 export function getToolRequirement(toolId) {
   const meta = TOOLS.find(item => item.id === toolId);
   if (!meta) return null;
-  if (meta.raster && !meta.vector) return "raster";
-  if (meta.vector && !meta.raster) return "vector";
+  if (meta.raster && !meta.vector && !meta.text) return "raster";
+  if (meta.vector && !meta.raster && !meta.text) return "vector";
+  if (meta.text && !meta.raster && !meta.vector) return "text";
   return null;
 }
 

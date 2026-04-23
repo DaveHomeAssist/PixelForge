@@ -1,5 +1,6 @@
 import { CHECKER, DEFAULT_PRIMARY } from "./constants.js";
 import { drawShape, getShapeBounds, getShapeHandles } from "./shapes.js";
+import { drawText, drawTextSelection } from "./text.js";
 import { makeCanvas } from "./utils.js";
 
 function getCachedCanvas(cache, key, width, height, paint) {
@@ -51,6 +52,8 @@ export function renderEditor({
   editorDoc,
   previewShape,
   selectedShapeRecord,
+  selectedTextLayer,
+  selectionMask,
   tool,
   brushSize,
   screenPoint,
@@ -99,6 +102,7 @@ export function renderEditor({
     ctx.globalCompositeOperation = layer.blend;
     ctx.translate(layer.ox, layer.oy);
     if (layer.type === "raster") ctx.drawImage(layer.canvas, 0, 0);
+    else if (layer.type === "text") drawText(ctx, layer);
     else layer.shapes.forEach(shape => drawShape(ctx, shape));
     ctx.restore();
   }
@@ -112,6 +116,50 @@ export function renderEditor({
 
   if (selectedShapeRecord?.layer?.visible && selectedShapeRecord.shape) {
     drawShapeSelection(ctx, selectedShapeRecord.layer, selectedShapeRecord.shape, zoom);
+  }
+
+  if (selectedTextLayer?.visible) {
+    ctx.save();
+    ctx.translate(selectedTextLayer.ox, selectedTextLayer.oy);
+    drawTextSelection(ctx, selectedTextLayer, zoom, ctx);
+    ctx.restore();
+  }
+
+  if (selectionMask) {
+    const maskLayer = editorDoc.layers[selectionMask.layerId];
+    if (maskLayer) {
+      const ox = maskLayer.ox || 0;
+      const oy = maskLayer.oy || 0;
+      const { rect, floating } = selectionMask;
+      // Floating preview
+      if (floating) {
+        const floatCanvas = makeCanvas(rect.w, rect.h);
+        floatCanvas.getContext("2d").putImageData(floating.imageData, 0, 0);
+        ctx.save();
+        ctx.translate(ox, oy);
+        ctx.globalAlpha = maskLayer.opacity ?? 1;
+        ctx.drawImage(floatCanvas, rect.x + floating.ox, rect.y + floating.oy);
+        ctx.restore();
+      }
+      // Marching ants
+      ctx.save();
+      ctx.translate(ox, oy);
+      ctx.lineWidth = 1 / zoom;
+      const dashOn = 4 / zoom;
+      const dashOff = 3 / zoom;
+      const offset = (performance.now() / 60) % (dashOn + dashOff);
+      ctx.setLineDash([dashOn, dashOff]);
+      ctx.lineDashOffset = -offset;
+      ctx.strokeStyle = "#000";
+      const floatOx = floating?.ox || 0;
+      const floatOy = floating?.oy || 0;
+      ctx.strokeRect(rect.x + floatOx, rect.y + floatOy, rect.w, rect.h);
+      ctx.lineDashOffset = -offset + (dashOn + dashOff) / 2;
+      ctx.strokeStyle = "#fff";
+      ctx.strokeRect(rect.x + floatOx, rect.y + floatOy, rect.w, rect.h);
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
   }
 
   ctx.strokeStyle = "#bfae98";

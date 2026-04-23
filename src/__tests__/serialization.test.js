@@ -28,7 +28,7 @@ describe("buildProjectPayload + hydrateProject round-trip", () => {
     const { doc, activeId } = createDefaultDocument(64, 64);
     const payload = buildProjectPayload(doc, 64, 64, activeId, null);
 
-    expect(payload.v).toBe(2);
+    expect(payload.v).toBe(3);
     expect(payload.w).toBe(64);
     expect(payload.layers).toHaveLength(2);
 
@@ -42,6 +42,59 @@ describe("buildProjectPayload + hydrateProject round-trip", () => {
   it("rejects invalid format", async () => {
     await expect(hydrateProject({})).rejects.toThrow("Bad format");
     await expect(hydrateProject(null)).rejects.toThrow();
+  });
+
+  it("round-trips a text layer through v3", async () => {
+    const { doc, activeId } = createDefaultDocument(200, 200);
+    const textLayer = {
+      id: "t1",
+      name: "Headline",
+      type: "text",
+      visible: true,
+      opacity: 1,
+      blend: "source-over",
+      locked: false,
+      ox: 20,
+      oy: 30,
+      text: "Hello World",
+      fontFamily: "Inter, sans-serif",
+      fontSize: 64,
+      fontWeight: 700,
+      italic: false,
+      color: "#112233",
+      align: "center",
+      maxWidth: null,
+    };
+    doc.layers[textLayer.id] = textLayer;
+    doc.order.push(textLayer.id);
+
+    const payload = buildProjectPayload(doc, 200, 200, activeId, null);
+    expect(payload.v).toBe(3);
+    const serialized = payload.layers.find(l => l.type === "text");
+    expect(serialized.text).toBe("Hello World");
+    expect(serialized.fontWeight).toBe(700);
+
+    const hydrated = await hydrateProject(payload);
+    const restored = hydrated.doc.layers.t1;
+    expect(restored).toBeDefined();
+    expect(restored.type).toBe("text");
+    expect(restored.text).toBe("Hello World");
+    expect(restored.fontSize).toBe(64);
+    expect(restored.color).toBe("#112233");
+    expect(restored.align).toBe("center");
+  });
+
+  it("loads a v2 document without text layers", async () => {
+    const legacy = {
+      v: 2,
+      w: 100, h: 100, aid: "r1",
+      layers: [
+        { id: "r1", name: "Bg", type: "raster", visible: true, opacity: 1, blend: "source-over", locked: false, ox: 0, oy: 0, data: "data:image/png;base64,AAAA" },
+      ],
+    };
+    const hydrated = await hydrateProject(legacy);
+    expect(hydrated.doc.order).toHaveLength(1);
+    expect(hydrated.doc.layers.r1.type).toBe("raster");
   });
 });
 
@@ -163,6 +216,43 @@ describe("captureLayerSnapshot + restoreLayerSnapshot", () => {
     const restored = restoreLayerSnapshot(snap, 32, 32);
     expect(restored.shapes).toHaveLength(1);
     expect(restored.shapes[0].id).toBe("s1");
+  });
+
+  it("round-trips a text layer", () => {
+    const layer = {
+      id: "t1",
+      name: "Title",
+      type: "text",
+      visible: true,
+      opacity: 0.8,
+      blend: "multiply",
+      locked: true,
+      ox: 10,
+      oy: 20,
+      text: "Ship it",
+      fontFamily: "Inter, sans-serif",
+      fontSize: 72,
+      fontWeight: 600,
+      italic: true,
+      color: "#ff00aa",
+      align: "right",
+      maxWidth: 400,
+    };
+
+    const snap = captureLayerSnapshot(layer);
+    expect(snap.type).toBe("text");
+    expect(snap.text).toBe("Ship it");
+    expect(snap.italic).toBe(true);
+    expect(snap.locked).toBe(true);
+
+    const restored = restoreLayerSnapshot(snap, 200, 200);
+    expect(restored.type).toBe("text");
+    expect(restored.text).toBe("Ship it");
+    expect(restored.fontWeight).toBe(600);
+    expect(restored.color).toBe("#ff00aa");
+    expect(restored.align).toBe("right");
+    expect(restored.maxWidth).toBe(400);
+    expect(restored.locked).toBe(true);
   });
 
   it("returns null for null layer", () => {

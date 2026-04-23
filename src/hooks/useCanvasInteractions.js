@@ -1,31 +1,12 @@
 import { useCallback, useEffect } from "react";
 import {
-  clamp, cloneShape, dist, ensureShape, extractRegion, lerp, rgbHex,
+  clamp, cloneShape, dist, ensureShape, extractRegion, rgbHex,
 } from "../utils.js";
 import {
   applyLineHandle, applyRectResize, getShapeHandles, hitShape,
 } from "../shapes.js";
-
-function stamp(ctx, x, y, size, color, opacity, erase) {
-  ctx.save();
-  ctx.globalAlpha = opacity;
-  ctx.globalCompositeOperation = erase ? "destination-out" : "source-over";
-  ctx.fillStyle = erase ? "rgba(0,0,0,1)" : color;
-  ctx.beginPath();
-  ctx.arc(x, y, size / 2, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-}
-
-function brushLine(ctx, x0, y0, x1, y1, size, color, opacity, erase) {
-  const distance = dist(x0, y0, x1, y1);
-  const step = Math.max(0.5, size * 0.15);
-  const steps = Math.max(1, Math.ceil(distance / step));
-  for (let index = 0; index <= steps; index += 1) {
-    const t = index / steps;
-    stamp(ctx, lerp(x0, x1, t), lerp(y0, y1, t), size, color, opacity, erase);
-  }
-}
+import { stampBrush, drawBrushSegment, getEffectiveRadius } from "../brushes.js";
+import { normalizeRect, clipRectToLayer, pointInRect, liftSelection, commitFloat } from "../marquee.js";
 
 export default function useCanvasInteractions({
   cvRef,
@@ -42,6 +23,7 @@ export default function useCanvasInteractions({
   pan,
   brushSize,
   brushOpacity,
+  brushPreset,
   color1,
   fillOn,
   strokeOn,
@@ -62,6 +44,9 @@ export default function useCanvasInteractions({
   bump,
   flash,
   triggerFeedback,
+  onCreateText,
+  selectionMask,
+  setSelectionMask,
 }) {
   const screenToDoc = useCallback((screenX, screenY) => {
     const rect = cvRef.current?.getBoundingClientRect();
@@ -175,14 +160,14 @@ export default function useCanvasInteractions({
       layer.contentHint = "edited";
       const startX = point.x - layer.ox;
       const startY = point.y - layer.oy;
-      const halfBrush = brushSize / 2;
+      const effRadius = getEffectiveRadius(brushPreset, brushSize);
       tracker.strokeBounds = {
-        minX: startX - halfBrush,
-        minY: startY - halfBrush,
-        maxX: startX + halfBrush,
-        maxY: startY + halfBrush,
+        minX: startX - effRadius,
+        minY: startY - effRadius,
+        maxX: startX + effRadius,
+        maxY: startY + effRadius,
       };
-      stamp(ctx, startX, startY, brushSize, color1, brushOpacity, tool === "eraser");
+      stampBrush(ctx, brushPreset, startX, startY, brushSize, color1, brushOpacity, tool === "eraser");
       bump();
       return;
     }
@@ -251,6 +236,39 @@ export default function useCanvasInteractions({
       return;
     }
 
+    if (tool === "marquee") {
+      if (!canEditLayer(layer, "select pixels")) { tracker.down = false; return; }
+      if (layer.type !== "raster") {
+        triggerFeedback("tool-marquee", "error");
+        flash("Select a raster layer to marquee", "error");
+        tracker.down = false;
+        return;
+      }
+      // Click inside an existing mask on the same layer → begin a move
+      const localPoint = { x: point.x - layer.ox, y: point.y - layer.oy };
+      if (selectionMask?.layerId === layer.id && pointInRect(localPoint, selectionMask.rect)) {
+        tracker.historyBefore = capturePatchSnapshot([layer.id], true);
+        tracker.drag = { mode: "marquee-move", startFloat: selectionMask.floating, startLocal: localPoint };
+        return;
+      }
+      // Fresh marquee — clear any existing mask (committing float if any)
+      if (selectionMask) {
+        if (selectionMask.floating) {
+          commitFloat(layer, selectionMask.rect, selectionMask.floating);
+        }
+        setSelectionMask(null);
+      }
+      tracker.historyBefore = capturePatchSnapshot([layer.id], true);
+      tracker.preview = { type: "marquee", x: localPoint.x, y: localPoint.y, w: 0, h: 0, layerId: layer.id };
+      return;
+    }
+
+    if (tool === "text") {
+      tracker.down = false;
+      if (onCreateText) onCreateText({ x: point.x, y: point.y });
+      return;
+    }
+
     if (tool === "eyedropper") {
       tracker.down = false;
       const canvas = cvRef.current;
@@ -269,6 +287,7 @@ export default function useCanvasInteractions({
   }, [
     activeId,
     brushOpacity,
+    brushPreset,
     brushSize,
     bump,
     canEditLayer,
@@ -280,13 +299,16 @@ export default function useCanvasInteractions({
     findShapeRecord,
     flash,
     getHandleAtPoint,
+    onCreateText,
     pan.x,
     pan.y,
     panStateRef,
     panningRef,
     screenToDoc,
+    selectionMask,
     setColor1,
     setSelectedShape,
+    setSelectionMask,
     spaceRef,
     tool,
     triggerFeedback,
@@ -324,13 +346,13 @@ export default function useCanvasInteractions({
         const y0 = tracker.ly - layer.oy;
         const x1 = point.x - layer.ox;
         const y1 = point.y - layer.oy;
-        brushLine(layer.canvas.getContext("2d"), x0, y0, x1, y1, brushSize, color1, brushOpacity, tool === "eraser");
+        drawBrushSegment(layer.canvas.getContext("2d"), brushPreset, x0, y0, x1, y1, brushSize, color1, brushOpacity, tool === "eraser");
         if (tracker.strokeBounds) {
-          const halfBrush = brushSize / 2;
-          tracker.strokeBounds.minX = Math.min(tracker.strokeBounds.minX, x0 - halfBrush, x1 - halfBrush);
-          tracker.strokeBounds.minY = Math.min(tracker.strokeBounds.minY, y0 - halfBrush, y1 - halfBrush);
-          tracker.strokeBounds.maxX = Math.max(tracker.strokeBounds.maxX, x0 + halfBrush, x1 + halfBrush);
-          tracker.strokeBounds.maxY = Math.max(tracker.strokeBounds.maxY, y0 + halfBrush, y1 + halfBrush);
+          const effRadius = getEffectiveRadius(brushPreset, brushSize);
+          tracker.strokeBounds.minX = Math.min(tracker.strokeBounds.minX, x0 - effRadius, x1 - effRadius);
+          tracker.strokeBounds.minY = Math.min(tracker.strokeBounds.minY, y0 - effRadius, y1 - effRadius);
+          tracker.strokeBounds.maxX = Math.max(tracker.strokeBounds.maxX, x0 + effRadius, x1 + effRadius);
+          tracker.strokeBounds.maxY = Math.max(tracker.strokeBounds.maxY, y0 + effRadius, y1 + effRadius);
         }
         tracker.moved = true;
         bump();
@@ -384,6 +406,28 @@ export default function useCanvasInteractions({
       };
       tracker.moved = true;
       bump();
+    } else if (tool === "marquee") {
+      if (tracker.drag?.mode === "marquee-move" && selectionMask) {
+        const localPoint = { x: point.x - layer.ox, y: point.y - layer.oy };
+        const dx = localPoint.x - tracker.drag.startLocal.x;
+        const dy = localPoint.y - tracker.drag.startLocal.y;
+        const mask = selectionMask;
+        let floating = tracker.drag.startFloat;
+        if (!floating) {
+          // First move — lift the pixels
+          floating = liftSelection(layer, mask.rect);
+        }
+        const nextFloating = { imageData: floating.imageData, ox: Math.round(dx), oy: Math.round(dy) };
+        setSelectionMask({ ...mask, floating: nextFloating });
+        tracker.moved = true;
+        bump();
+      } else if (tracker.preview?.type === "marquee") {
+        const localPoint = { x: point.x - layer.ox, y: point.y - layer.oy };
+        tracker.preview.w = localPoint.x - tracker.preview.x;
+        tracker.preview.h = localPoint.y - tracker.preview.y;
+        tracker.moved = true;
+        bump();
+      }
     }
 
     tracker.lx = point.x;
@@ -391,6 +435,7 @@ export default function useCanvasInteractions({
   }, [
     activeId,
     brushOpacity,
+    brushPreset,
     brushSize,
     bump,
     color1,
@@ -402,7 +447,9 @@ export default function useCanvasInteractions({
     panStateRef,
     panningRef,
     screenToDoc,
+    selectionMask,
     setPan,
+    setSelectionMask,
     strokeOn,
     strokeW,
     tool,
@@ -421,6 +468,28 @@ export default function useCanvasInteractions({
 
     if ((tool === "brush" || tool === "eraser") && layer?.type === "raster" && tracker.historyBefore) {
       commitRasterStroke(layer.id);
+    } else if (tool === "marquee" && layer?.type === "raster") {
+      if (tracker.drag?.mode === "marquee-move" && selectionMask) {
+        // Commit the float back to the canvas at the new position
+        if (selectionMask.floating) {
+          commitFloat(layer, selectionMask.rect, selectionMask.floating);
+          const newRect = {
+            x: selectionMask.rect.x + selectionMask.floating.ox,
+            y: selectionMask.rect.y + selectionMask.floating.oy,
+            w: selectionMask.rect.w,
+            h: selectionMask.rect.h,
+          };
+          setSelectionMask({ layerId: layer.id, rect: newRect, floating: null });
+          commitPatchHistory(tracker.historyBefore, [layer.id], { selectedShape });
+        }
+      } else if (tracker.preview?.type === "marquee") {
+        const rect = clipRectToLayer(normalizeRect(tracker.preview), layer);
+        if (rect.w < 2 || rect.h < 2) {
+          setSelectionMask(null);
+        } else {
+          setSelectionMask({ layerId: layer.id, rect, floating: null });
+        }
+      }
     } else if (["rect", "ellipse", "line"].includes(tool) && layer?.type === "vector" && tracker.preview) {
       const shape = ensureShape({ ...tracker.preview });
       layer.shapes.push(shape);
@@ -451,7 +520,9 @@ export default function useCanvasInteractions({
     docRef,
     panningRef,
     selectedShape,
+    selectionMask,
     setSelectedShape,
+    setSelectionMask,
     tool,
     tsRef,
   ]);

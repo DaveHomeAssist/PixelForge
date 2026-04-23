@@ -10,6 +10,7 @@ export default function EditorMenu({
   handleLoad,
   handleSave,
   handleExport,
+  handleOpenAIGenerate,
   doUndo,
   doRedo,
   toolMeta,
@@ -40,6 +41,9 @@ export default function EditorMenu({
         <button className={`pf-mbtn ${feedbackClass("load")}`} onClick={handleLoad} title="Open a saved PixelForge project"><FolderOpen size={12} /> Open</button>
         <button className={`pf-mbtn ${feedbackClass("save")}`} onClick={handleSave} title={saveButtonTitle}>{canUseFileSave ? <Save size={12} /> : <Download size={12} />} {saveButtonLabel}</button>
         <button className={`pf-mbtn ${hasArtwork ? "primary" : ""} ${feedbackClass("export")}`} onClick={handleExport} title="Export a flattened PNG"><Download size={12} /> Export PNG</button>
+        {handleOpenAIGenerate && (
+          <button className={`pf-mbtn ${feedbackClass("ai-generate")}`} onClick={handleOpenAIGenerate} title="Generate image with AI" aria-label="Generate with AI">✨ Generate</button>
+        )}
         <div className="pf-menu-sep" />
         <button className={`pf-mbtn ${undoN === 0 ? "dis" : ""} ${feedbackClass("undo")}`} onClick={doUndo} title="Undo (Cmd/Ctrl+Z)"><Undo2 size={12} /> Undo</button>
         <button className={`pf-mbtn ${redoN === 0 ? "dis" : ""} ${feedbackClass("redo")}`} onClick={doRedo} title="Redo (Cmd/Ctrl+Shift+Z or Cmd/Ctrl+Y)"><Redo2 size={12} /> Redo</button>

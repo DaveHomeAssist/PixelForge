@@ -5,10 +5,14 @@ import SelectionSection from "./components/SelectionSection.jsx";
 import PaletteSection from "./components/PaletteSection.jsx";
 import LayersSection from "./components/LayersSection.jsx";
 import ToolSettingsSection from "./components/ToolSettingsSection.jsx";
+import TextPropertiesSection from "./components/TextPropertiesSection.jsx";
 import DraftRecoveryBanner from "./components/DraftRecoveryBanner.jsx";
 import NewDocumentModal from "./components/NewDocumentModal.jsx";
 import ResizeDocumentModal from "./components/ResizeDocumentModal.jsx";
 import StatusBar from "./components/StatusBar.jsx";
+import TextEditOverlay from "./components/TextEditOverlay.jsx";
+import AISettingsModal from "./components/AISettingsModal.jsx";
+import AIGenerateModal from "./components/AIGenerateModal.jsx";
 import useEditorPrefs from "./hooks/useEditorPrefs.js";
 import useAutosaveRecovery from "./hooks/useAutosaveRecovery.js";
 import useHistory from "./hooks/useHistory.js";
@@ -28,6 +32,7 @@ import {
   cloneShape, mergePrefs, getToolRequirement,
 } from "./utils.js";
 import { renderEditor } from "./render.js";
+import { commitFloat } from "./marquee.js";
 
 /* Inlined constants, utilities, shapes, serialization, autosave, and CSS
    have been extracted to their own modules — see imports above. */
@@ -38,6 +43,7 @@ export default function PixelForge() {
   const [tool, setTool] = useState("brush");
   const [brushSize, setBrushSize] = useState(10);
   const [brushOpacity, setBrushOpacity] = useState(1);
+  const [brushPreset, setBrushPreset] = useState("soft");
   const [color1, setColor1] = useState(DEFAULT_PRIMARY);
   const [color2, setColor2] = useState(DEFAULT_SECONDARY);
   const [color1Input, setColor1Input] = useState(DEFAULT_PRIMARY);
@@ -76,6 +82,10 @@ export default function PixelForge() {
   const [hoverHandle, setHoverHandle] = useState(null);
   const [isPanning, setIsPanning] = useState(false);
   const [isSpaceHeld, setIsSpaceHeld] = useState(false);
+  const [isDragHover, setIsDragHover] = useState(false);
+  const [editingText, setEditingText] = useState(null); // { layerId } | null
+  const [selectionMask, setSelectionMask] = useState(null); // { layerId, rect, floating } | null
+  const [aiModal, setAiModal] = useState(null); // null | "generate" | "settings"
 
   /* ─── Refs ─── */
   const cvRef = useRef(null);
@@ -112,6 +122,7 @@ export default function PixelForge() {
   const fieldFeedbackTimer = useRef(null);
   const controlTxRef = useRef(null);
   const bumpScheduledRef = useRef(false);
+  const clipboardRef = useRef(null); // { imageData, w, h } | null
 
   const flash = useCallback((message, tone = "info", ms = 2000) => {
     setToast({ message, tone });
@@ -135,12 +146,24 @@ export default function PixelForge() {
     const d = doc.current;
     setLayers(d.order.map(id => {
       const l = d.layers[id];
-      return {
+      const meta = {
         id: l.id, name: l.name, type: l.type, visible: l.visible,
         opacity: l.opacity, blend: l.blend, locked: l.locked,
+        ox: l.ox, oy: l.oy,
         contentHint: l.type === "raster" ? (l.contentHint || "edited") : undefined,
         shapeCount: l.type === "vector" ? l.shapes.length : 0,
       };
+      if (l.type === "text") {
+        meta.text = l.text;
+        meta.fontFamily = l.fontFamily;
+        meta.fontSize = l.fontSize;
+        meta.fontWeight = l.fontWeight;
+        meta.italic = l.italic;
+        meta.color = l.color;
+        meta.align = l.align;
+        meta.maxWidth = l.maxWidth;
+      }
+      return meta;
     }));
   }, []);
 
@@ -228,6 +251,7 @@ export default function PixelForge() {
   } = useEditorPrefs({
     brushSize,
     brushOpacity,
+    brushPreset,
     strokeW,
     fillOn,
     strokeOn,
@@ -237,6 +261,7 @@ export default function PixelForge() {
     mobilePanelTab,
     setBrushSize,
     setBrushOpacity,
+    setBrushPreset,
     setStrokeW,
     setFillOn,
     setStrokeOn,
@@ -300,6 +325,8 @@ export default function PixelForge() {
     onFileChange,
     handleImportImage,
     onImportImageChange,
+    handleViewportDrop,
+    handleClipboardPaste,
     applyResizeCanvas,
     applyNewDocument,
     recoverDraftProject,
@@ -372,6 +399,8 @@ export default function PixelForge() {
 
   const {
     addLayer,
+    addTextLayerAt,
+    updateTextLayer,
     delLayer,
     moveLayer,
     reorderLayer,
@@ -397,6 +426,40 @@ export default function PixelForge() {
     flash,
   });
 
+  const onCreateText = useCallback((at) => {
+    const newId = addTextLayerAt(at);
+    if (newId) setEditingText({ layerId: newId });
+  }, [addTextLayerAt]);
+
+  const handleAIResult = useCallback(async (blob, promptText) => {
+    const name = `AI: ${(promptText || "result").slice(0, 28)}`;
+    await handleClipboardPaste(new File([blob], `${name}.png`, { type: blob.type || "image/png" }));
+  }, [handleClipboardPaste]);
+
+  const editingLayer = editingText ? layers.find(l => l.id === editingText.layerId) : null;
+  const commitEditingText = useCallback((nextText) => {
+    if (!editingText) return;
+    const id = editingText.layerId;
+    setEditingText(null);
+    const layer = doc.current.layers[id];
+    if (!layer) return;
+    const trimmed = (nextText || "").trim();
+    if (!trimmed) {
+      // Empty commit → delete the layer
+      delLayer(id);
+      return;
+    }
+    if (layer.text !== nextText) updateTextLayer(id, { text: nextText });
+  }, [delLayer, editingText, updateTextLayer]);
+
+  const cancelEditingText = useCallback(() => {
+    if (!editingText) return;
+    const id = editingText.layerId;
+    const layer = doc.current.layers[id];
+    setEditingText(null);
+    if (layer && (!layer.text || !layer.text.trim())) delLayer(id);
+  }, [delLayer, editingText]);
+
   const {
     getHandleAtPoint,
     onDown,
@@ -417,6 +480,7 @@ export default function PixelForge() {
     pan,
     brushSize,
     brushOpacity,
+    brushPreset,
     color1,
     color2,
     fillOn,
@@ -437,6 +501,9 @@ export default function PixelForge() {
     bump,
     flash,
     triggerFeedback,
+    onCreateText,
+    selectionMask,
+    setSelectionMask,
   });
 
   // eslint-disable-next-line react-hooks/set-state-in-effect -- mirrors color1 prop into a separate "editing draft" input. Phase 2 refactor target.
@@ -488,6 +555,40 @@ export default function PixelForge() {
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [isDirty]);
+
+  useEffect(() => {
+    const onPaste = (e) => {
+      if (isEditableTarget(e.target)) return;
+      // Marquee: internal clipboard takes priority if a selection exists
+      if (clipboardRef.current && !e.clipboardData?.files?.length) {
+        e.preventDefault();
+        const { imageData, w: cw, h: ch } = clipboardRef.current;
+        const tmp = document.createElement("canvas");
+        tmp.width = cw; tmp.height = ch;
+        tmp.getContext("2d").putImageData(imageData, 0, 0);
+        tmp.toBlob(blob => { if (blob) handleClipboardPaste(blob); }, "image/png");
+        return;
+      }
+      const items = Array.from(e.clipboardData?.items || []);
+      const imageItem = items.find(item => item.kind === "file" && item.type.startsWith("image/"));
+      if (imageItem) {
+        const file = imageItem.getAsFile();
+        if (file) {
+          e.preventDefault();
+          handleClipboardPaste(file);
+          return;
+        }
+      }
+      const files = Array.from(e.clipboardData?.files || []);
+      const imageFile = files.find(f => f.type.startsWith("image/"));
+      if (imageFile) {
+        e.preventDefault();
+        handleClipboardPaste(imageFile);
+      }
+    };
+    document.addEventListener("paste", onPaste);
+    return () => document.removeEventListener("paste", onPaste);
+  }, [handleClipboardPaste]);
 
   useEffect(() => {
     const media = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`);
@@ -549,6 +650,10 @@ export default function PixelForge() {
 
   /* ─── Render ─── */
   const render = useCallback(() => {
+    const activeLayerForRender = doc.current.layers[activeId];
+    const selectedTextLayer = activeLayerForRender?.type === "text" && tool === "move"
+      ? activeLayerForRender
+      : null;
     renderEditor({
       canvas: cvRef.current,
       viewport: vpRef.current,
@@ -560,6 +665,8 @@ export default function PixelForge() {
       editorDoc: doc.current,
       previewShape: ts.current.preview,
       selectedShapeRecord: findShapeRecord(),
+      selectedTextLayer,
+      selectionMask,
       tool,
       brushSize,
       screenPoint: { x: ts.current.scrX, y: ts.current.scrY },
@@ -570,7 +677,7 @@ export default function PixelForge() {
     // mutates, forcing this callback to re-create and the downstream effect to
     // re-run requestAnimationFrame with fresh doc state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [brushSize, docH, docW, findShapeRecord, pan, tick, tool, zoom]);
+  }, [activeId, brushSize, docH, docW, findShapeRecord, pan, selectionMask, tick, tool, zoom]);
 
   useEffect(() => {
     if (raf.current) cancelAnimationFrame(raf.current);
@@ -583,6 +690,35 @@ export default function PixelForge() {
     if (vpRef.current) obs.observe(vpRef.current);
     return () => obs.disconnect();
   }, [bump]);
+
+  // Animate marching ants while a selection exists
+  useEffect(() => {
+    if (!selectionMask) return undefined;
+    let id = null;
+    const loop = () => {
+      bump();
+      id = window.setTimeout(loop, 80);
+    };
+    id = window.setTimeout(loop, 80);
+    return () => window.clearTimeout(id);
+  }, [selectionMask, bump]);
+
+  // Commit any floating marquee pixels when switching away from the marquee tool
+  const prevToolRef = useRef(tool);
+  useEffect(() => {
+    const wasMarquee = prevToolRef.current === "marquee";
+    const isMarquee = tool === "marquee";
+    if (wasMarquee && !isMarquee && selectionMask?.floating) {
+      const layer = doc.current.layers[selectionMask.layerId];
+      if (layer) {
+        const before = capturePatchSnapshot([layer.id], true);
+        commitFloat(layer, selectionMask.rect, selectionMask.floating);
+        commitPatchHistory(before, [layer.id], { selectedShape });
+      }
+      setSelectionMask(null);
+    }
+    prevToolRef.current = tool;
+  }, [tool, selectionMask, capturePatchSnapshot, commitPatchHistory, selectedShape]);
 
   /* ─── Undo / Redo ─── */
   const handleUndo = useCallback(() => {
@@ -712,6 +848,92 @@ export default function PixelForge() {
     triggerFeedback("shape-duplicate", "success");
   }, [canEditLayer, capturePatchSnapshot, commitPatchHistory, findShapeRecord, triggerFeedback]);
 
+  const copyMarquee = useCallback(() => {
+    if (!selectionMask) return;
+    const layer = doc.current.layers[selectionMask.layerId];
+    if (!layer) return;
+    let imageData;
+    if (selectionMask.floating) {
+      imageData = selectionMask.floating.imageData;
+    } else {
+      imageData = layer.canvas.getContext("2d").getImageData(
+        selectionMask.rect.x, selectionMask.rect.y,
+        selectionMask.rect.w, selectionMask.rect.h,
+      );
+    }
+    clipboardRef.current = { imageData, w: selectionMask.rect.w, h: selectionMask.rect.h };
+    flash("Copied selection", "success", 1200);
+  }, [flash, selectionMask]);
+
+  const cutMarquee = useCallback(() => {
+    if (!selectionMask) return;
+    const layer = doc.current.layers[selectionMask.layerId];
+    if (!layer) return;
+    copyMarquee();
+    const before = capturePatchSnapshot([layer.id], true);
+    if (selectionMask.floating) {
+      // float exists — discard (don't commit); but any prior lift already cleared pixels
+    } else {
+      layer.canvas.getContext("2d").clearRect(
+        selectionMask.rect.x, selectionMask.rect.y,
+        selectionMask.rect.w, selectionMask.rect.h,
+      );
+    }
+    commitPatchHistory(before, [layer.id], { selectedShape });
+    setSelectionMask(null);
+  }, [capturePatchSnapshot, commitPatchHistory, copyMarquee, selectedShape, selectionMask]);
+
+  const deleteMarquee = useCallback(() => {
+    if (!selectionMask) return;
+    const layer = doc.current.layers[selectionMask.layerId];
+    if (!layer) return;
+    const before = capturePatchSnapshot([layer.id], true);
+    if (!selectionMask.floating) {
+      layer.canvas.getContext("2d").clearRect(
+        selectionMask.rect.x, selectionMask.rect.y,
+        selectionMask.rect.w, selectionMask.rect.h,
+      );
+    }
+    commitPatchHistory(before, [layer.id], { selectedShape });
+    setSelectionMask(null);
+  }, [capturePatchSnapshot, commitPatchHistory, selectedShape, selectionMask]);
+
+  const nudgeMarquee = useCallback((dx, dy) => {
+    if (!selectionMask) return;
+    const layer = doc.current.layers[selectionMask.layerId];
+    if (!layer) return;
+    let floating = selectionMask.floating;
+    if (!floating) {
+      floating = {
+        imageData: layer.canvas.getContext("2d").getImageData(
+          selectionMask.rect.x, selectionMask.rect.y,
+          selectionMask.rect.w, selectionMask.rect.h,
+        ),
+        ox: 0, oy: 0,
+      };
+      layer.canvas.getContext("2d").clearRect(
+        selectionMask.rect.x, selectionMask.rect.y,
+        selectionMask.rect.w, selectionMask.rect.h,
+      );
+    }
+    setSelectionMask({
+      ...selectionMask,
+      floating: { imageData: floating.imageData, ox: floating.ox + dx, oy: floating.oy + dy },
+    });
+  }, [selectionMask]);
+
+  const escapeMarquee = useCallback(() => {
+    if (!selectionMask) return false;
+    const layer = doc.current.layers[selectionMask.layerId];
+    if (layer && selectionMask.floating) {
+      const before = capturePatchSnapshot([layer.id], true);
+      commitFloat(layer, selectionMask.rect, selectionMask.floating);
+      commitPatchHistory(before, [layer.id], { selectedShape });
+    }
+    setSelectionMask(null);
+    return true;
+  }, [capturePatchSnapshot, commitPatchHistory, selectedShape, selectionMask]);
+
   const deleteSelectedShape = useCallback(() => {
     const record = findShapeRecord();
     if (!record || !canEditLayer(record.layer, "delete this shape")) return;
@@ -737,14 +959,41 @@ export default function PixelForge() {
         else duplicateActiveLayer();
         return;
       }
+      // Marquee clipboard ops (before paste — paste is handled by the document-level listener)
+      if (!typing && selectionMask) {
+        if ((e.ctrlKey || e.metaKey) && key === "c") {
+          e.preventDefault();
+          copyMarquee();
+          return;
+        }
+        if ((e.ctrlKey || e.metaKey) && key === "x") {
+          e.preventDefault();
+          cutMarquee();
+          return;
+        }
+      }
       if (typing) return;
-      const sc = { v:"move", b:"brush", e:"eraser", r:"rect", o:"ellipse", l:"line", i:"eyedropper" };
+      const sc = { v:"move", m:"marquee", b:"brush", e:"eraser", r:"rect", o:"ellipse", l:"line", t:"text", i:"eyedropper" };
       if (!e.ctrlKey && !e.metaKey && !e.altKey && sc[key]) selectTool(sc[key]);
-      if (!e.ctrlKey && !e.metaKey && !e.altKey && key === "x") swapColors();
-      if (e.key === "Escape") clearSelection();
-      if ((e.key === "Delete" || e.key === "Backspace") && selectedShape) {
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && key === "x" && !selectionMask) swapColors();
+      if (e.key === "Escape") {
+        if (!escapeMarquee()) clearSelection();
+      }
+      if ((e.key === "Delete" || e.key === "Backspace")) {
+        if (selectionMask) {
+          e.preventDefault();
+          deleteMarquee();
+        } else if (selectedShape) {
+          e.preventDefault();
+          deleteSelectedShape();
+        }
+      }
+      if (selectionMask && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
         e.preventDefault();
-        deleteSelectedShape();
+        const step = e.shiftKey ? 10 : 1;
+        const dx = e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0;
+        const dy = e.key === "ArrowUp" ? -step : e.key === "ArrowDown" ? step : 0;
+        nudgeMarquee(dx, dy);
       }
       if (e.key === "[") setBrushSize(s => Math.max(1, s - 2));
       if (e.key === "]") setBrushSize(s => Math.min(200, s + 2));
@@ -752,7 +1001,7 @@ export default function PixelForge() {
     const ku = (e) => { if (e.code === "Space") space.current = false; };
     window.addEventListener("keydown", kd); window.addEventListener("keyup", ku);
     return () => { window.removeEventListener("keydown", kd); window.removeEventListener("keyup", ku); };
-  }, [clearSelection, deleteSelectedShape, duplicateActiveLayer, duplicateSelectedShape, handleRedo, handleSave, handleUndo, selectTool, selectedShape, swapColors]);
+  }, [clearSelection, copyMarquee, cutMarquee, deleteMarquee, deleteSelectedShape, duplicateActiveLayer, duplicateSelectedShape, escapeMarquee, handleRedo, handleSave, handleUndo, nudgeMarquee, selectTool, selectedShape, selectionMask, swapColors]);
 
   function commitActiveLayerName() {
     if (!activeId) return;
@@ -873,6 +1122,7 @@ export default function PixelForge() {
         handleLoad={handleLoad}
         handleSave={handleSave}
         handleExport={handleExport}
+        handleOpenAIGenerate={() => setAiModal("generate")}
         doUndo={handleUndo}
         doRedo={handleRedo}
         toolMeta={toolMeta}
@@ -929,10 +1179,36 @@ export default function PixelForge() {
         </div>
 
         {/* ── Canvas Viewport ── */}
-        <div ref={vpRef} className="pf-viewport" style={{ cursor: cursorStyle }}
+        <div ref={vpRef} className={`pf-viewport ${isDragHover ? "pf-viewport-drag-hover" : ""}`} style={{ cursor: cursorStyle }}
           onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp} onPointerCancel={onUp}
-          onContextMenu={e => e.preventDefault()}>
+          onContextMenu={e => e.preventDefault()}
+          onDragOver={e => {
+            const types = Array.from(e.dataTransfer?.types || []);
+            if (!types.includes("Files")) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "copy";
+            if (!isDragHover) setIsDragHover(true);
+          }}
+          onDragLeave={e => {
+            if (e.currentTarget.contains(e.relatedTarget)) return;
+            setIsDragHover(false);
+          }}
+          onDrop={e => {
+            e.preventDefault();
+            setIsDragHover(false);
+            handleViewportDrop(Array.from(e.dataTransfer?.files || []));
+          }}>
           <canvas ref={cvRef} />
+          {editingLayer && editingLayer.type === "text" && (
+            <TextEditOverlay
+              key={editingLayer.id}
+              layer={editingLayer}
+              zoom={zoom}
+              pan={pan}
+              onCommit={commitEditingText}
+              onCancel={cancelEditingText}
+            />
+          )}
           {showStarterOverlay && (
             <div className="pf-starter">
               <div className="pf-starter-card">
@@ -1007,6 +1283,8 @@ export default function PixelForge() {
               brushSize={brushSize}
               brushOpacity={brushOpacity}
               setBrushOpacity={setBrushOpacity}
+              brushPreset={brushPreset}
+              setBrushPreset={setBrushPreset}
               fillOn={fillOn}
               setFillOn={setFillOn}
               strokeOn={strokeOn}
@@ -1026,6 +1304,14 @@ export default function PixelForge() {
               duplicateSelectedShape={duplicateSelectedShape}
               deleteSelectedShape={deleteSelectedShape}
               feedbackClass={feedbackClass}
+            />
+          )}
+
+          {activeLayer?.type === "text" && showDesktopSection("tool") && (
+            <TextPropertiesSection
+              activeLayer={activeLayer}
+              updateTextLayer={updateTextLayer}
+              startEditingText={id => setEditingText({ layerId: id })}
             />
           )}
 
@@ -1120,6 +1406,21 @@ export default function PixelForge() {
         closeModal={() => setModal(null)}
         applyResizeCanvas={applyResizeCanvas}
       />
+
+      {aiModal === "generate" && (
+        <AIGenerateModal
+          onClose={() => setAiModal(null)}
+          onOpenSettings={() => setAiModal("settings")}
+          onResult={handleAIResult}
+        />
+      )}
+
+      {aiModal === "settings" && (
+        <AISettingsModal
+          onClose={() => setAiModal(null)}
+          onSaved={() => {}}
+        />
+      )}
     </div>
   );
 }

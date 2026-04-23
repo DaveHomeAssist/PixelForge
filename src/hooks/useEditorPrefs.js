@@ -4,6 +4,9 @@ import {
   PREFS_KEY, RECENT_COLORS_LIMIT, RECENT_SIZES_LIMIT,
 } from "../constants.js";
 import { mergePrefs, pushRecentValue } from "../utils.js";
+import { BRUSH_PRESETS } from "../brushes.js";
+
+const VALID_PRESET_IDS = new Set(BRUSH_PRESETS.map(p => p.id));
 
 function loadPrefs() {
   try {
@@ -27,6 +30,7 @@ function persistPrefs(prefs) {
 export default function useEditorPrefs({
   brushSize,
   brushOpacity,
+  brushPreset,
   strokeW,
   fillOn,
   strokeOn,
@@ -36,6 +40,7 @@ export default function useEditorPrefs({
   mobilePanelTab,
   setBrushSize,
   setBrushOpacity,
+  setBrushPreset,
   setStrokeW,
   setFillOn,
   setStrokeOn,
@@ -69,6 +74,10 @@ export default function useEditorPrefs({
     const p = latestPrefsRef.current;
     setBrushSize(p.toolPrefs.brushSize || 10);
     setBrushOpacity(p.toolPrefs.brushOpacity ?? 1);
+    if (setBrushPreset) {
+      const storedPreset = p.toolPrefs.brushPreset;
+      setBrushPreset(VALID_PRESET_IDS.has(storedPreset) ? storedPreset : "soft");
+    }
     setStrokeW(p.toolPrefs.strokeWidth || 2);
     setFillOn(p.toolPrefs.fillOn ?? true);
     setStrokeOn(p.toolPrefs.strokeOn ?? true);
@@ -83,6 +92,7 @@ export default function useEditorPrefs({
     hydratedRef.current = true;
   }, [
     setBrushOpacity,
+    setBrushPreset,
     setBrushSize,
     setColor1,
     setColor2,
@@ -136,6 +146,7 @@ export default function useEditorPrefs({
     const changed =
       prev.brushSize !== brushSize ||
       prev.brushOpacity !== brushOpacity ||
+      prev.brushPreset !== brushPreset ||
       prev.strokeW !== strokeW ||
       prev.fillOn !== fillOn ||
       prev.strokeOn !== strokeOn ||
@@ -147,7 +158,7 @@ export default function useEditorPrefs({
 
     if (!changed) return;
 
-    prevSyncRef.current = { brushSize, brushOpacity, strokeW, fillOn, strokeOn, color1, color2, tool, mobilePanelTab, brushSizeTool: brushSize };
+    prevSyncRef.current = { brushSize, brushOpacity, brushPreset, strokeW, fillOn, strokeOn, color1, color2, tool, mobilePanelTab, brushSizeTool: brushSize };
 
     updatePrefs(current => {
       let next = current;
@@ -155,12 +166,13 @@ export default function useEditorPrefs({
       if (
         current.toolPrefs.brushSize !== brushSize ||
         current.toolPrefs.brushOpacity !== brushOpacity ||
+        current.toolPrefs.brushPreset !== brushPreset ||
         current.toolPrefs.strokeWidth !== strokeW ||
         current.toolPrefs.fillOn !== fillOn ||
         current.toolPrefs.strokeOn !== strokeOn
       ) {
         next = mergePrefs(next, {
-          toolPrefs: { brushSize, brushOpacity, strokeWidth: strokeW, fillOn, strokeOn },
+          toolPrefs: { brushSize, brushOpacity, brushPreset, strokeWidth: strokeW, fillOn, strokeOn },
         });
       }
       // Recent colors
@@ -185,7 +197,7 @@ export default function useEditorPrefs({
       }
       return next;
     });
-  }, [brushOpacity, brushSize, color1, color2, fillOn, mobilePanelTab, strokeOn, strokeW, tool, updatePrefs]);
+  }, [brushOpacity, brushPreset, brushSize, color1, color2, fillOn, mobilePanelTab, strokeOn, strokeW, tool, updatePrefs]);
 
   return {
     prefs,
