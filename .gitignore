@@ -1,3 +1,9 @@
 node_modules
 dist
 .DS_Store
+
+# Local scratch — review notes, planning docs, AI prompts — never commit
+_review/
+_plan/
+_loose-copy.jsx
+_phase-prompts/
