@@ -69,9 +69,11 @@ PHASE 4 — ARCHITECTURE                                 COMPLETED P4A
     - PixelForge.jsx shrunk significantly
     - Commits: 31a2927, 0527973
 
-4B. Extract more inline functions to useCallback               PARTIAL
-    - Top-level functions in useToolSelection are memoized
-    - Remaining: commitColor, applyPrimaryColor, control-tx helpers
+4B. Extract more inline functions to useCallback               COMPLETED
+    - Moved palette helpers and control-transaction editing into
+      src/hooks/useEditorControls.js
+    - Converted zoom controls to useCallback and removed the remaining
+      hook suppressions from PixelForge render/tool-selection paths
 
 
 ================================================================================
@@ -100,5 +102,5 @@ Phase   Description                     Status       Effort    Impact
   2B    Memoize keyboard deps            COMPLETED    —         Medium
   3A    Throttle brush rAF               COMPLETED    —         Medium
   4A    Decompose PixelForge.jsx         COMPLETED    —         Medium
-  4B    useCallback inline functions     PARTIAL      Small     Low
+  4B    useCallback inline functions     COMPLETED    —         Low
   5A    Fix 5 pre-existing test fails    COMPLETED    —         Medium

@@ -21,7 +21,7 @@ export default function useToolSelection({
 }) {
   const [intentLayerId, setIntentLayerId] = useState(null);
   const [intentLayerTone, setIntentLayerTone] = useState("suggested");
-  const [lastLayerByType, setLastLayerByType] = useState({ raster: null, vector: null });
+  const lastLayerByTypeRef = useRef({ raster: null, vector: null });
   const intentLayerTimer = useRef(null);
 
   // Cleanup pending pulse timer on unmount.
@@ -32,10 +32,11 @@ export default function useToolSelection({
   useEffect(() => {
     const current = layers.find(l => l.id === activeId);
     if (!current?.type) return;
-    // Preserving previous behavior from PixelForge.jsx — we only write when the
-    // id actually changes, which is a no-op for unrelated renders.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLastLayerByType(prev => prev[current.type] === current.id ? prev : { ...prev, [current.type]: current.id });
+    if (lastLayerByTypeRef.current[current.type] === current.id) return;
+    lastLayerByTypeRef.current = {
+      ...lastLayerByTypeRef.current,
+      [current.type]: current.id,
+    };
   }, [activeId, layers]);
 
   const pulseLayer = useCallback((id, tone = "suggested", ms = 180) => {
@@ -61,7 +62,7 @@ export default function useToolSelection({
       seen.add(id);
       ordered.push(id);
     };
-    pushCandidate(lastLayerByType[type]);
+    pushCandidate(lastLayerByTypeRef.current[type]);
     pushCandidate(activeId);
     [...layers].reverse().forEach(l => pushCandidate(l.id));
     if (!ordered.length && !includeLocked) {
@@ -75,13 +76,13 @@ export default function useToolSelection({
         fallbackSeen.add(id);
         fallbackOrdered.push(id);
       };
-      fallbackPush(lastLayerByType[type]);
+      fallbackPush(lastLayerByTypeRef.current[type]);
       fallbackPush(activeId);
       [...layers].reverse().forEach(l => fallbackPush(l.id));
       return fallbackOrdered[0] || null;
     }
     return ordered[0] || null;
-  }, [activeId, lastLayerByType, layers]);
+  }, [activeId, layers]);
 
   const focusLayerId = useCallback((id, { pulse = true } = {}) => {
     if (!id || !layers.some(l => l.id === id)) return null;
@@ -122,6 +123,5 @@ export default function useToolSelection({
     pulseLayer,
     intentLayerId,
     intentLayerTone,
-    lastLayerByType,
   };
 }

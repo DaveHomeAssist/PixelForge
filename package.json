@@ -8,13 +8,15 @@
     "npm": ">=10"
   },
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "lint": "eslint src eslint.config.js vitest.config.js vite.config.js",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "ci": "npm run lint && npm run test && npm run build"
+    "preinstall": "node scripts/verify-runtime.mjs --require-npm",
+    "verify:runtime": "node scripts/verify-runtime.mjs",
+    "dev": "node scripts/verify-runtime.mjs && vite",
+    "build": "node scripts/verify-runtime.mjs && vite build",
+    "preview": "node scripts/verify-runtime.mjs && vite preview",
+    "lint": "node scripts/verify-runtime.mjs && eslint src eslint.config.js vitest.config.js vite.config.js",
+    "test": "node scripts/verify-runtime.mjs && vitest run",
+    "test:watch": "node scripts/verify-runtime.mjs && vitest",
+    "ci": "node scripts/verify-runtime.mjs && npm run lint && npm run test && npm run build"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",

@@ -1,0 +1,144 @@
+{
+  "project": {
+    "id": "pixel-forge",
+    "name": "PixelForge"
+  },
+  "status": "warn",
+  "freshness": "stale",
+  "updatedAt": "2026-04-24T16:05:36.203Z",
+  "summary": "v1.0.0 · branch main · dirty tree · 1 open issue",
+  "recommendations": [
+    {
+      "priority": "P2",
+      "title": "Refresh project activity",
+      "reason": "Latest commit activity is outside the freshness window.",
+      "command": null
+    },
+    {
+      "priority": "P2",
+      "title": "Resolve working tree drift",
+      "reason": "Uncommitted changes make dashboard status harder to trust.",
+      "command": "git status --short"
+    }
+  ],
+  "sections": [
+    {
+      "title": "Build",
+      "items": [
+        {
+          "label": "Version",
+          "value": "1.0.0",
+          "status": "ok"
+        },
+        {
+          "label": "Dist built",
+          "value": "yes",
+          "status": "ok"
+        },
+        {
+          "label": "Deps installed",
+          "value": "yes",
+          "status": "ok"
+        }
+      ]
+    },
+    {
+      "title": "Git",
+      "items": [
+        {
+          "label": "Branch",
+          "value": "main",
+          "status": "ok"
+        },
+        {
+          "label": "Working tree",
+          "value": "dirty",
+          "status": "warn"
+        }
+      ]
+    },
+    {
+      "title": "Quality",
+      "items": [
+        {
+          "label": "Lint config",
+          "value": "present",
+          "status": "ok"
+        },
+        {
+          "label": "Test runner",
+          "value": "vitest",
+          "status": "ok"
+        }
+      ]
+    }
+  ],
+  "kpis": [
+    {
+      "label": "Version",
+      "value": "1.0.0",
+      "status": "ok"
+    },
+    {
+      "label": "Branch",
+      "value": "main",
+      "status": "ok"
+    },
+    {
+      "label": "Working tree",
+      "value": "dirty",
+      "status": "warn"
+    },
+    {
+      "label": "Dist built",
+      "value": "yes",
+      "status": "ok"
+    },
+    {
+      "label": "Deps installed",
+      "value": "yes",
+      "status": "ok"
+    },
+    {
+      "label": "Lint config",
+      "value": "present",
+      "status": "ok"
+    },
+    {
+      "label": "Test runner",
+      "value": "vitest",
+      "status": "ok"
+    }
+  ],
+  "issues": [
+    {
+      "id": "git-dirty",
+      "severity": "P3",
+      "status": "open",
+      "title": "Working tree has uncommitted changes",
+      "source": ".git"
+    }
+  ],
+  "links": [
+    {
+      "label": "README",
+      "path": "README.md"
+    },
+    {
+      "label": "package.json",
+      "path": "package.json"
+    },
+    {
+      "label": "Built index",
+      "path": "dist/index.html"
+    }
+  ],
+  "metadata": {
+    "generator": "tools/ops/build-ops-state.mjs",
+    "schemaVersion": 1,
+    "root": ".",
+    "lastCommitAt": "2026-04-14T23:18:30-04:00",
+    "lastCommitAgeMinutes": 13727,
+    "staleAfterMinutes": 1440
+  }
+}

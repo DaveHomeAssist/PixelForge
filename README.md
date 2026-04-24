@@ -31,6 +31,8 @@ npm install
 npm run dev
 ```
 
+Use Node 22, 23, or 24. The repo pins `22` in `.nvmrc` and `.node-version`, and install / build scripts now fail fast on unsupported runtimes instead of surfacing tool-specific crashes.
+
 Build:
 ```bash
 npm run build

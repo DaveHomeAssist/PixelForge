@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useEffectEvent } from "react";
 import "./PixelForge.css";
 import EditorMenu from "./components/EditorMenu.jsx";
 import SelectionSection from "./components/SelectionSection.jsx";
@@ -19,13 +19,14 @@ import useHistory from "./hooks/useHistory.js";
 import useLayerOps from "./hooks/useLayerOps.js";
 import useDocumentController from "./hooks/useDocumentController.js";
 import useCanvasInteractions from "./hooks/useCanvasInteractions.js";
+import useEditorControls from "./hooks/useEditorControls.js";
 import useToolSelection from "./hooks/useToolSelection.js";
 import useDerivedState from "./hooks/useDerivedState.js";
 
 import {
   DEFAULT_W, DEFAULT_H, MIN_ZOOM, MAX_ZOOM,
   DEFAULT_PRIMARY, DEFAULT_SECONDARY, DEFAULT_BG, MOBILE_BREAKPOINT,
-  TOOLS, HEX_COLOR_RE,
+  TOOLS,
 } from "./constants.js";
 import {
   uid, clamp, normalizeHexColor, isEditableTarget,
@@ -506,7 +507,40 @@ export default function PixelForge() {
     setSelectionMask,
   });
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- mirrors color1 prop into a separate "editing draft" input. Phase 2 refactor target.
+  const {
+    commitColor,
+    applyPrimaryColor,
+    applySecondaryColor,
+    swapColors,
+    beginLayerOpacityEdit,
+    handleLayerOpacityInput,
+    commitLayerOpacityEdit,
+    beginSelectionFieldEdit,
+    handleSelectionFieldInput,
+    commitSelectionFieldEdits,
+  } = useEditorControls({
+    activeId,
+    color1,
+    color2,
+    selectedShape,
+    controlTxRef,
+    getLayer,
+    capturePatchSnapshot,
+    commitPatchHistory,
+    findShapeRecord,
+    shapeToDraft,
+    syncEditor,
+    setOpacityDraft,
+    setSelectionDraft,
+    setColor1,
+    setColor1Input,
+    setColor2,
+    setColor2Input,
+    triggerFeedback,
+    triggerFieldFeedback,
+    flash,
+  });
+
   useEffect(() => { setColor1Input(color1); }, [color1]);
   // eslint-disable-next-line react-hooks/set-state-in-effect -- mirrors color2 prop into a separate "editing draft" input. Phase 2 refactor target.
   useEffect(() => { setColor2Input(color2); }, [color2]);
@@ -602,54 +636,13 @@ export default function PixelForge() {
     return () => media.removeListener(sync);
   }, []);
 
-  function commitColor(which, value) {
-    const raw = (value || "").trim();
-    const hex = raw.startsWith("#") ? raw : `#${raw}`;
-    const field = which === 1 ? "color1" : "color2";
-    const scope = which === 1 ? "color-primary" : "color-secondary";
-    if (!HEX_COLOR_RE.test(hex)) {
-      const fallback = which === 1 ? color1 : color2;
-      if (which === 1) setColor1Input(fallback);
-      else setColor2Input(fallback);
-      triggerFieldFeedback(field, "error");
-      triggerFeedback(scope, "error");
-      flash("Use a valid 3 or 6 digit hex color.", "error");
-      return;
-    }
-    const next = normalizeHexColor(hex, which === 1 ? color1 : color2);
-    if (which === 1) {
-      setColor1(next);
-      setColor1Input(next);
-    } else {
-      setColor2(next);
-      setColor2Input(next);
-    }
-    triggerFeedback(scope, "success", 140);
-  }
-
-  function applyPrimaryColor(next) {
-    setColor1(normalizeHexColor(next, color1));
-    triggerFeedback("color-primary", "success", 140);
-  }
-
-  function applySecondaryColor(next) {
-    setColor2(normalizeHexColor(next, color2));
-    triggerFeedback("color-secondary", "success", 140);
-  }
-
-  const swapColors = useCallback(() => {
-    setColor1(color2);
-    setColor2(color1);
-    triggerFeedback("swap-colors", "success", 140);
-  }, [color1, color2, triggerFeedback]);
-
   /* ─── Init ─── */
   useEffect(() => {
     resetDocument();
   }, [resetDocument]);
 
   /* ─── Render ─── */
-  const render = useCallback(() => {
+  const renderFrame = useEffectEvent(() => {
     const activeLayerForRender = doc.current.layers[activeId];
     const selectedTextLayer = activeLayerForRender?.type === "text" && tool === "move"
       ? activeLayerForRender
@@ -672,18 +665,13 @@ export default function PixelForge() {
       screenPoint: { x: ts.current.scrX, y: ts.current.scrY },
       isPanning: panning.current,
     });
-    // `tick` is intentionally included below: doc is a ref (doc.current), so the
-    // linter cannot see it as a dependency. `tick` is bumped whenever the doc
-    // mutates, forcing this callback to re-create and the downstream effect to
-    // re-run requestAnimationFrame with fresh doc state.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeId, brushSize, docH, docW, findShapeRecord, pan, selectionMask, tick, tool, zoom]);
+  });
 
   useEffect(() => {
     if (raf.current) cancelAnimationFrame(raf.current);
-    raf.current = requestAnimationFrame(render);
+    raf.current = requestAnimationFrame(() => renderFrame());
     return () => { if (raf.current) cancelAnimationFrame(raf.current); };
-  }, [render]);
+  }, [activeId, brushSize, docH, docW, findShapeRecord, pan, renderFrame, selectionMask, tick, tool, zoom]);
 
   useEffect(() => {
     const obs = new ResizeObserver(() => bump());
@@ -729,93 +717,15 @@ export default function PixelForge() {
     if (doRedo()) triggerFeedback("redo", "success", 140);
   }, [doRedo, triggerFeedback]);
 
-  function zoomIn() {
+  const zoomIn = useCallback(() => {
     setZoom(z => clamp(z * 1.25, MIN_ZOOM, MAX_ZOOM));
     triggerFeedback("zoom-in", "success", 140);
-  }
+  }, [triggerFeedback]);
 
-  function zoomOut() {
+  const zoomOut = useCallback(() => {
     setZoom(z => clamp(z * 0.8, MIN_ZOOM, MAX_ZOOM));
     triggerFeedback("zoom-out", "success", 140);
-  }
-
-  /* ─── Brush drawing ─── */
-
-  function beginControlTx(layerId) {
-    controlTxRef.current = { layerId, snapshot: capturePatchSnapshot([layerId], true), dirty: false };
-  }
-
-  function endControlTx(meta = { selectedShape }) {
-    if (!controlTxRef.current) return;
-    const { layerId, snapshot, dirty } = controlTxRef.current;
-    controlTxRef.current = null;
-    if (!dirty) return;
-    commitPatchHistory(snapshot, [layerId], meta);
-  }
-
-  function mutateLayerLive(id, mutate) {
-    const layer = getLayer(id);
-    if (!layer) return;
-    mutate(layer);
-    if (controlTxRef.current?.layerId === id) controlTxRef.current.dirty = true;
-    syncEditor();
-  }
-
-  function mutateShapeFieldLive(field, rawValue) {
-    const text = `${rawValue ?? ""}`.trim();
-    if (!text || text === "-") return;
-    const value = Number(text);
-    if (!Number.isFinite(value)) return;
-    const record = findShapeRecord();
-    if (!record) return;
-    if (record.shape.type === "line") {
-      record.shape[field] = value;
-    } else if (field === "x" || field === "y") {
-      record.shape[field] = value;
-    } else {
-      record.shape[field] = Math.max(1, value);
-    }
-    if (controlTxRef.current?.layerId === record.layer.id) controlTxRef.current.dirty = true;
-    syncEditor();
-  }
-
-  function beginLayerOpacityEdit() {
-    if (!activeId || controlTxRef.current?.layerId === activeId) return;
-    beginControlTx(activeId);
-  }
-
-  function handleLayerOpacityInput(rawValue) {
-    const nextValue = clamp(Number(rawValue) || 0, 0, 100);
-    setOpacityDraft(nextValue);
-    beginLayerOpacityEdit();
-    mutateLayerLive(activeId, layer => { layer.opacity = nextValue / 100; });
-  }
-
-  function commitLayerOpacityEdit() {
-    const current = getLayer(activeId);
-    endControlTx();
-    setOpacityDraft(current ? Math.round(current.opacity * 100) : null);
-    triggerFeedback("layer-opacity", "success", 140);
-  }
-
-  function beginSelectionFieldEdit() {
-    const record = findShapeRecord();
-    if (!record || controlTxRef.current?.layerId === record.layer.id) return;
-    beginControlTx(record.layer.id);
-  }
-
-  function handleSelectionFieldInput(field, rawValue) {
-    setSelectionDraft(prev => ({ ...(prev || {}), [field]: rawValue }));
-    beginSelectionFieldEdit();
-    mutateShapeFieldLive(field, rawValue);
-  }
-
-  function commitSelectionFieldEdits() {
-    const record = findShapeRecord();
-    endControlTx();
-    setSelectionDraft(shapeToDraft(record?.shape));
-    triggerFeedback("shape-edit", "success", 140);
-  }
+  }, [triggerFeedback]);
 
   function duplicateShape(shape) {
     if (shape.type === "line") {
