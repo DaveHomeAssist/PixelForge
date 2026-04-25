@@ -43,6 +43,14 @@ Full local CI check (lint + test + build):
 npm run ci
 ```
 
+Browser smoke checks (critical editor flows in real Chromium):
+```bash
+npm run smoke:preview
+npm run smoke:dev
+```
+
+These smoke checks validate: `New`, `Resize`, `Layer Add`, `Brush`, `Undo/Redo`, `Import`, `Save` fallback (`.pforge` download), `Export PNG`, and AI settings redirect when keys are missing.
+
 Deployment to GitHub Pages is handled by `.github/workflows/deploy-pages.yml` on every push to `main`.
 
 ## History

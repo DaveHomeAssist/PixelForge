@@ -237,14 +237,14 @@ export default function PixelForge() {
     markDirty,
   });
 
-  function fitViewTo(w, h) {
+  const fitViewTo = useCallback((w, h) => {
     if (!vpRef.current) return;
     const vw = vpRef.current.clientWidth;
     const vh = vpRef.current.clientHeight;
     const s = Math.min((vw - 80) / w, (vh - 80) / h, 1.75);
     setZoom(s);
     setPan({ x: (vw - w * s) / 2, y: (vh - h * s) / 2 });
-  }
+  }, []);
 
   const {
     prefs,
