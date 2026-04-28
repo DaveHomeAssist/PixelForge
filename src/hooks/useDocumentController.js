@@ -183,16 +183,23 @@ export default function useDocumentController({
 
   const handleSave = useCallback(async () => {
     try {
+      let hasBrowserKeys = false;
+      try {
+        const raw = window.localStorage.getItem("PixelForge.ai.v1");
+        hasBrowserKeys = !!raw && (raw.includes("anthropicKey") || raw.includes("providerKey"));
+      } catch {
+        hasBrowserKeys = false;
+      }
       const result = await saveProjectPayload(buildPayload(), saveHandle);
       if (result.mode === "file") {
         setSaveHandle(result.handle);
         markClean();
         triggerFeedback("save", "success");
-        flash("Project saved", "success");
+        flash(hasBrowserKeys ? "Project saved. AI keys stay in this browser." : "Project saved", "success", hasBrowserKeys ? 3600 : 2000);
         return;
       }
       triggerFeedback("save", "success");
-      flash("Project downloaded. Browser fallback does not mark the project as saved.", "success", 2600);
+      flash(hasBrowserKeys ? "Project downloaded. AI keys stay in this browser." : "Project downloaded. Browser fallback does not mark the project as saved.", "success", hasBrowserKeys ? 3600 : 2600);
     } catch (err) {
       triggerFeedback("save", "error");
       flash("Save error: " + err.message, "error");

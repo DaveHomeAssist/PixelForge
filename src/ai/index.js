@@ -7,7 +7,7 @@ async function loadAnthropicSdk() {
   if (cachedSdk) return cachedSdk;
   // Dynamic import so the SDK is not in the critical bundle — only loaded if
   // the user actually uses AI features.
-  const mod = await import(/* @vite-ignore */ "@anthropic-ai/sdk");
+  const mod = await import("@anthropic-ai/sdk");
   cachedSdk = mod.default ? { Anthropic: mod.default } : { Anthropic: mod.Anthropic };
   return cachedSdk;
 }

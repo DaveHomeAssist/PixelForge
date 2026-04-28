@@ -43,24 +43,17 @@ Full local CI check (lint + test + build):
 npm run ci
 ```
 
-Browser smoke checks (critical editor flows in real Chromium):
-```bash
-npm run smoke:preview
-npm run smoke:dev
-```
+Deployment to GitHub Pages is handled by `.github/workflows/deploy-pages.yml` after CI succeeds on `main`, with a manual dispatch fallback.
 
-These smoke checks validate: `New`, `Resize`, `Layer Add`, `Brush`, `Undo/Redo`, `Import`, `Save` fallback (`.pforge` download), `Export PNG`, and AI settings redirect when keys are missing.
+## Security notes
 
-Visual viewport smoke (deterministic screenshots + report):
-```bash
-npm run smoke:visual
-```
+AI provider keys are stored in browser `localStorage` on this device. They are not written into `.pforge` project files or autosave drafts, but any JavaScript running on the PixelForge origin can read them. Use keys with narrow permissions and rotate them if the browser profile or deployed origin is compromised.
 
-Screenshots and `report.json` are written to `artifacts/smoke-visual/`.
+Google Fonts are loaded from Google-hosted CSS. Subresource integrity is not applied because Google rotates that stylesheet; self-host fonts if this moves into a stricter production environment.
 
-In GitHub Actions, the visual smoke job is available in `.github/workflows/ci.yml` and runs when the repository variable `PIXELFORGE_VISUAL_SMOKE=true` is set.
+## Repository hygiene
 
-Deployment to GitHub Pages is handled by `.github/workflows/deploy-pages.yml` on every push to `main`.
+Avoid keeping the working tree in an iCloud-synced Desktop folder. iCloud can create duplicate `* 2.*` files in build outputs or dependency folders, which makes diffs and CI failures harder to reason about. A local path such as `~/Code/pixel-forge` is safer for day-to-day development.
 
 ## History
 

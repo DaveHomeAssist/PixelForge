@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { hasAnthropicKey, hasProviderKey } from "../ai/storage.js";
-import { generateLayer } from "../ai/index.js";
 
 export default function AIGenerateModal({
   onClose,
@@ -29,6 +28,7 @@ export default function AIGenerateModal({
     const controller = new AbortController();
     abortRef.current = controller;
     try {
+      const { generateLayer } = await import("../ai/index.js");
       const { blob } = await generateLayer(trimmed, {
         aspect,
         signal: controller.signal,

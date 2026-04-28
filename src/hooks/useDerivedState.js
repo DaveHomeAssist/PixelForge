@@ -191,7 +191,7 @@ export default function useDerivedState({
           : tool === "eyedropper"
             ? "crosshair"
             : ["brush", "eraser", "rect", "ellipse", "line"].includes(tool)
-              ? "none"
+              ? "crosshair"
               : "default";
   const showNextSection = visibleNextActions.length > 0;
   const showStarterOverlay = isBlankDocument && prefs.behaviorPrefs.showStarterActions && !modal && !starterDismissed;

@@ -119,6 +119,9 @@ export default function PixelForge() {
   const panning = useRef(false);
   const panSt = useRef({ x: 0, y: 0, ox: 0, oy: 0 });
   const raf = useRef(null);
+  const zoomRef = useRef(zoom);
+  const fitZoomRef = useRef(null);
+  const fitObservedRef = useRef(false);
   const feedbackTimer = useRef(null);
   const fieldFeedbackTimer = useRef(null);
   const controlTxRef = useRef(null);
@@ -242,6 +245,7 @@ export default function PixelForge() {
     const vw = vpRef.current.clientWidth;
     const vh = vpRef.current.clientHeight;
     const s = Math.min((vw - 80) / w, (vh - 80) / h, 1.75);
+    fitZoomRef.current = s;
     setZoom(s);
     setPan({ x: (vw - w * s) / 2, y: (vh - h * s) / 2 });
   }, []);
@@ -497,6 +501,7 @@ export default function PixelForge() {
     syncEditor,
     setSelectedShape,
     setColor1,
+    setIsPanning,
     setPan,
     setZoom,
     bump,
@@ -568,11 +573,9 @@ export default function PixelForge() {
   useEffect(() => () => window.clearTimeout(newToast.current), []);
   useEffect(() => () => window.clearTimeout(feedbackTimer.current), []);
   useEffect(() => () => window.clearTimeout(fieldFeedbackTimer.current), []);
+  useEffect(() => { zoomRef.current = zoom; }, [zoom]);
 
-  // Sync ref-based cursor state for render-safe access (effects may read refs)
   useEffect(() => {
-    setIsPanning(panning.current);
-    setIsSpaceHeld(space.current);
     if (!selectedShape) { setHoverHandle(null); return; }
     const record = findShapeRecord();
     if (!record || record.layer.id !== activeId) { setHoverHandle(null); return; }
@@ -674,10 +677,20 @@ export default function PixelForge() {
   }, [activeId, brushSize, docH, docW, findShapeRecord, pan, renderFrame, selectionMask, tick, tool, zoom]);
 
   useEffect(() => {
-    const obs = new ResizeObserver(() => bump());
+    const obs = new ResizeObserver(() => {
+      const viewport = vpRef.current;
+      if (!viewport) return;
+      const hasSize = viewport.clientWidth > 0 && viewport.clientHeight > 0;
+      if (hasSize && (!fitObservedRef.current || Math.abs(zoomRef.current - (fitZoomRef.current || 0)) < 0.001)) {
+        fitObservedRef.current = true;
+        fitViewTo(docW, docH);
+        return;
+      }
+      bump();
+    });
     if (vpRef.current) obs.observe(vpRef.current);
     return () => obs.disconnect();
-  }, [bump]);
+  }, [bump, docH, docW, fitViewTo]);
 
   // Animate marching ants while a selection exists
   useEffect(() => {
@@ -726,6 +739,22 @@ export default function PixelForge() {
     setZoom(z => clamp(z * 0.8, MIN_ZOOM, MAX_ZOOM));
     triggerFeedback("zoom-out", "success", 140);
   }, [triggerFeedback]);
+
+  const showBrushCursor = ["brush", "eraser"].includes(tool);
+  const brushCursorSize = Math.max(1, brushSize * zoom);
+  const brushCursorStyle = {
+    position: "absolute",
+    left: ts.current.scrX - brushCursorSize / 2,
+    top: ts.current.scrY - brushCursorSize / 2,
+    width: brushCursorSize,
+    height: brushCursorSize,
+    border: tool === "eraser" ? "1px solid rgba(37, 52, 63, 0.72)" : "1px solid rgba(42, 111, 151, 0.82)",
+    borderRadius: "50%",
+    boxShadow: "0 0 0 1px rgba(255, 255, 255, 0.78)",
+    pointerEvents: "none",
+    transform: "translateZ(0)",
+    zIndex: 3,
+  };
 
   function duplicateShape(shape) {
     if (shape.type === "line") {
@@ -859,7 +888,10 @@ export default function PixelForge() {
     const kd = (e) => {
       const typing = isEditableTarget(e.target);
       const key = e.key.toLowerCase();
-      if (e.code === "Space" && !typing) { space.current = true; e.preventDefault(); }
+      if (e.code === "Space" && !typing) { space.current = true; setIsSpaceHeld(true); e.preventDefault(); }
+      if ((e.ctrlKey || e.metaKey) && (key === "=" || key === "+")) { e.preventDefault(); zoomIn(); return; }
+      if ((e.ctrlKey || e.metaKey) && key === "-") { e.preventDefault(); zoomOut(); return; }
+      if ((e.ctrlKey || e.metaKey) && key === "0") { e.preventDefault(); handleFitView(); return; }
       if ((e.ctrlKey || e.metaKey) && key === "z") { e.preventDefault(); e.shiftKey ? handleRedo() : handleUndo(); return; }
       if ((e.ctrlKey || e.metaKey) && key === "y") { e.preventDefault(); handleRedo(); return; }
       if ((e.ctrlKey || e.metaKey) && key === "s") { e.preventDefault(); handleSave(); return; }
@@ -905,13 +937,20 @@ export default function PixelForge() {
         const dy = e.key === "ArrowUp" ? -step : e.key === "ArrowDown" ? step : 0;
         nudgeMarquee(dx, dy);
       }
+      if (!selectionMask && !selectedShape && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+        e.preventDefault();
+        const step = e.shiftKey ? 64 : 16;
+        const dx = e.key === "ArrowLeft" ? step : e.key === "ArrowRight" ? -step : 0;
+        const dy = e.key === "ArrowUp" ? step : e.key === "ArrowDown" ? -step : 0;
+        setPan(prev => ({ x: prev.x + dx, y: prev.y + dy }));
+      }
       if (e.key === "[") setBrushSize(s => Math.max(1, s - 2));
       if (e.key === "]") setBrushSize(s => Math.min(200, s + 2));
     };
-    const ku = (e) => { if (e.code === "Space") space.current = false; };
+    const ku = (e) => { if (e.code === "Space") { space.current = false; setIsSpaceHeld(false); } };
     window.addEventListener("keydown", kd); window.addEventListener("keyup", ku);
     return () => { window.removeEventListener("keydown", kd); window.removeEventListener("keyup", ku); };
-  }, [clearSelection, copyMarquee, cutMarquee, deleteMarquee, deleteSelectedShape, duplicateActiveLayer, duplicateSelectedShape, escapeMarquee, handleRedo, handleSave, handleUndo, nudgeMarquee, selectTool, selectedShape, selectionMask, swapColors]);
+  }, [clearSelection, copyMarquee, cutMarquee, deleteMarquee, deleteSelectedShape, duplicateActiveLayer, duplicateSelectedShape, escapeMarquee, handleFitView, handleRedo, handleSave, handleUndo, nudgeMarquee, selectTool, selectedShape, selectionMask, swapColors, zoomIn, zoomOut]);
 
   function commitActiveLayerName() {
     if (!activeId) return;
@@ -1109,6 +1148,7 @@ export default function PixelForge() {
             handleViewportDrop(Array.from(e.dataTransfer?.files || []));
           }}>
           <canvas ref={cvRef} />
+          {showBrushCursor && <div data-testid="pf-brush-cursor" style={brushCursorStyle} />}
           {editingLayer && editingLayer.type === "text" && (
             <TextEditOverlay
               key={editingLayer.id}

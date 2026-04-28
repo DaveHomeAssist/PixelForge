@@ -1,5 +1,5 @@
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  base: "/PixelForge/",
+  base: process.env.VITE_BASE ?? "/PixelForge/",
 });
