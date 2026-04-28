@@ -1,5 +1,5 @@
 export function supportsFileSave() {
-  return typeof window !== "undefined" && "showSaveFilePicker" in window;
+  return typeof window !== "undefined" && typeof window.showSaveFilePicker === "function";
 }
 
 export async function saveProjectPayload(payload, currentHandle, suggestedName = "project.pforge") {
