@@ -51,6 +51,15 @@ npm run smoke:dev
 
 These smoke checks validate: `New`, `Resize`, `Layer Add`, `Brush`, `Undo/Redo`, `Import`, `Save` fallback (`.pforge` download), `Export PNG`, and AI settings redirect when keys are missing.
 
+Visual viewport smoke (deterministic screenshots + report):
+```bash
+npm run smoke:visual
+```
+
+Screenshots and `report.json` are written to `artifacts/smoke-visual/`.
+
+In GitHub Actions, the visual smoke job is available in `.github/workflows/ci.yml` and runs when the repository variable `PIXELFORGE_VISUAL_SMOKE=true` is set.
+
 Deployment to GitHub Pages is handled by `.github/workflows/deploy-pages.yml` on every push to `main`.
 
 ## History
