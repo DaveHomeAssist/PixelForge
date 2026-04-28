@@ -142,7 +142,7 @@ describe("useDocumentController", () => {
     expect(args.stateSetters.setLastSavedAt).toHaveBeenCalledWith(1712750400000);
     expect(args.recoveryApi.clearRecoveryDraft).toHaveBeenCalled();
     expect(args.feedbackApi.triggerFeedback).toHaveBeenCalledWith("save", "success");
-    expect(args.feedbackApi.flash).toHaveBeenCalledWith("Project saved", "success");
+    expect(args.feedbackApi.flash).toHaveBeenCalledWith("Project saved", "success", 2000);
   });
 
   it("rejects invalid new document background colors before mutating state", () => {

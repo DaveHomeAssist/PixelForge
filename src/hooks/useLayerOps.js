@@ -106,14 +106,17 @@ export default function useLayerOps({
 
   const moveLayer = useCallback((id, dir) => {
     const i = docRef.current.order.indexOf(id);
-    const j = i + dir;
+    const j = dir === "top" ? docRef.current.order.length - 1
+      : dir === "bottom" ? 0
+      : i + dir;
     if (j < 0 || j >= docRef.current.order.length) return;
     withFullHistory(() => {
       const d = docRef.current;
-      [d.order[i], d.order[j]] = [d.order[j], d.order[i]];
+      const [layerId] = d.order.splice(i, 1);
+      d.order.splice(j, 0, layerId);
       return {};
     });
-    triggerFeedback(dir > 0 ? "layer-up" : "layer-down", "success", 140);
+    triggerFeedback(dir === "top" || dir > 0 ? "layer-up" : "layer-down", "success", 140);
   }, [docRef, triggerFeedback, withFullHistory]);
 
   const reorderLayer = useCallback((sourceId, targetId) => {
@@ -146,8 +149,8 @@ export default function useLayerOps({
     triggerFeedback("layer-lock", "success", 140);
   }, [triggerFeedback, updateLayerState]);
 
-  const duplicateActiveLayer = useCallback(() => {
-    const layer = getLayer(activeId);
+  const duplicateLayer = useCallback((layerId = activeId) => {
+    const layer = getLayer(layerId);
     if (!layer) return;
     withFullHistory(() => {
       const copyId = uid();
@@ -200,6 +203,8 @@ export default function useLayerOps({
     triggerFeedback("layer-duplicate", "success");
   }, [activeId, docH, docRef, docW, getLayer, setActiveId, setSelectedShape, triggerFeedback, withFullHistory]);
 
+  const duplicateActiveLayer = useCallback(() => duplicateLayer(activeId), [activeId, duplicateLayer]);
+
   const mergeLayerDown = useCallback((id) => {
     const index = docRef.current.order.indexOf(id);
     const upper = getLayer(id);
@@ -238,6 +243,7 @@ export default function useLayerOps({
     setBlend,
     renameLayer,
     toggleLock,
+    duplicateLayer,
     duplicateActiveLayer,
     mergeLayerDown,
   };

@@ -9,6 +9,7 @@ import {
   normalizeHexColor, pushRecentPreset, getAnchorOffset,
 } from "../utils.js";
 import { drawShape } from "../shapes.js";
+import { drawText } from "../text.js";
 import {
   createDefaultDocument, buildProjectPayload, hydrateProject, hydrateDraftPayload,
 } from "../serialization.js";
@@ -278,6 +279,27 @@ export default function useDocumentController({
     return importImageFile(file, { name: "Pasted Image" });
   }, [importImageFile]);
 
+  const handleClipboardRead = useCallback(async () => {
+    if (!navigator.clipboard?.read) {
+      flash("Clipboard image paste is unavailable here. Use Cmd+V on the canvas.", "info", 2600);
+      return false;
+    }
+    try {
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        const imageType = item.types.find(type => type.startsWith("image/"));
+        if (!imageType) continue;
+        const blob = await item.getType(imageType);
+        return handleClipboardPaste(new File([blob], "Pasted Image", { type: imageType }));
+      }
+      flash("Clipboard does not contain an image.", "info", 2200);
+      return false;
+    } catch {
+      flash("Clipboard access was blocked. Use Cmd+V on the canvas.", "info", 2600);
+      return false;
+    }
+  }, [flash, handleClipboardPaste]);
+
   const applyResizeCanvas = useCallback(() => {
     const nextW = clamp(Math.round(+resizeForm.width || docW), 64, 8192);
     const nextH = clamp(Math.round(+resizeForm.height || docH), 64, 8192);
@@ -417,9 +439,17 @@ export default function useDocumentController({
     clearRecoveryDraft();
   }, [clearRecoveryDraft]);
 
-  const handleExport = useCallback(() => {
-    const exportCanvas = makeCanvas(docW, docH);
+  const handleExport = useCallback((options = {}) => {
+    const scale = Math.max(0.1, Number(options.scale) || 1);
+    const region = options.region || { x: 0, y: 0, w: docW, h: docH };
+    const exportCanvas = makeCanvas(Math.max(1, Math.round(region.w * scale)), Math.max(1, Math.round(region.h * scale)));
     const ctx = exportCanvas.getContext("2d");
+    ctx.scale(scale, scale);
+    ctx.translate(-region.x, -region.y);
+    if (options.includeBackground !== false) {
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(region.x, region.y, region.w, region.h);
+    }
     const editorDoc = docRef.current;
     for (const id of editorDoc.order) {
       const layer = editorDoc.layers[id];
@@ -429,15 +459,24 @@ export default function useDocumentController({
       ctx.globalCompositeOperation = layer.blend;
       ctx.translate(layer.ox, layer.oy);
       if (layer.type === "raster") ctx.drawImage(layer.canvas, 0, 0);
+      else if (layer.type === "text") drawText(ctx, layer);
       else layer.shapes.forEach(shape => drawShape(ctx, shape));
       ctx.restore();
     }
+    const format = options.format || "png";
+    const mime = format === "jpg" ? "image/jpeg" : format === "webp" ? "image/webp" : "image/png";
     const anchor = document.createElement("a");
-    anchor.href = exportCanvas.toDataURL("image/png");
-    anchor.download = "export.png";
-    anchor.click();
+    const finish = (blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      anchor.href = url;
+      anchor.download = `${options.filename || "pixelforge-export"}.${format}`;
+      anchor.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    };
+    exportCanvas.toBlob(finish, mime, options.quality ?? 0.92);
     triggerFeedback("export", "success");
-    flash("Exported PNG", "success");
+    flash(`Exported ${format.toUpperCase()}`, "success");
   }, [docH, docRef, docW, flash, triggerFeedback]);
 
   const canUseFileSave = supportsFileSave();
@@ -455,6 +494,7 @@ export default function useDocumentController({
     onImportImageChange,
     handleViewportDrop,
     handleClipboardPaste,
+    handleClipboardRead,
     applyResizeCanvas,
     applyNewDocument,
     recoverDraftProject,

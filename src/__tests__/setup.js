@@ -1,6 +1,23 @@
 import "fake-indexeddb/auto";
 import "vitest-canvas-mock";
 
+if (!window.matchMedia) {
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    writable: true,
+    value: (query) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener() {},
+      removeEventListener() {},
+      addListener() {},
+      removeListener() {},
+      dispatchEvent: () => false,
+    }),
+  });
+}
+
 // --- localStorage mock -------------------------------------------------------
 // jsdom provides one, but in this environment window.localStorage.clear is
 // missing (likely because of the `--localstorage-file` warning preventing the

@@ -1,5 +1,5 @@
 import {
-  MousePointer2, Pencil, Eraser, Square, Circle, Minus, Pipette, Type, SquareDashed,
+  MousePointer2, Pencil, Eraser, Square, Circle, Minus, Pipette, Type, SquareDashed, PaintBucket,
 } from "lucide-react";
 
 export const DEFAULT_W = 1200, DEFAULT_H = 800;
@@ -27,6 +27,7 @@ export const RESIZE_ANCHORS = [
 export const DEFAULT_PREFS = {
   uiPrefs: {
     mobileTab: "next",
+    collapsedSections: {},
   },
   toolPrefs: {
     lastRasterTool: "brush",
@@ -37,6 +38,7 @@ export const DEFAULT_PREFS = {
     strokeWidth: 2,
     fillOn: true,
     strokeOn: true,
+    bucketTolerance: 16,
     recentColors: [DEFAULT_PRIMARY, DEFAULT_SECONDARY],
     recentBrushSizes: [6, 10, 24],
   },
@@ -48,6 +50,7 @@ export const DEFAULT_PREFS = {
       { width: 1600, height: 900, background: DEFAULT_BG },
     ],
     lastResizeAnchor: "center",
+    lastExport: { format: "png", quality: 0.92, scale: 1, includeBackground: true, selectedOnly: false, filename: "pixelforge-export" },
   },
   behaviorPrefs: {
     autoSwitchLayerForTool: true,
@@ -61,6 +64,7 @@ export const TOOLS = [
   { id: "marquee", label: "Marquee Select", icon: SquareDashed, shortcut: "M", raster: true, vector: false, text: false },
   { id: "brush", label: "Brush", icon: Pencil, shortcut: "B", raster: true, vector: false, text: false },
   { id: "eraser", label: "Eraser", icon: Eraser, shortcut: "E", raster: true, vector: false, text: false },
+  { id: "bucket", label: "Bucket Fill", icon: PaintBucket, shortcut: "G", raster: true, vector: false, text: false },
   { id: "rect", label: "Rectangle", icon: Square, shortcut: "R", raster: false, vector: true, text: false },
   { id: "ellipse", label: "Ellipse", icon: Circle, shortcut: "O", raster: false, vector: true, text: false },
   { id: "line", label: "Line", icon: Minus, shortcut: "L", raster: false, vector: true, text: false },
@@ -96,6 +100,11 @@ export const TOOL_COPY = {
     title: "Eraser",
     description: "Remove raster pixels non-destructively from the active raster layer.",
     hint: "Eraser size tracks the same shortcut keys as the brush.",
+  },
+  bucket: {
+    title: "Bucket Fill",
+    description: "Fill connected raster regions with the primary color.",
+    hint: "Raise tolerance to fill nearby shades in the same click.",
   },
   rect: {
     title: "Rectangle",

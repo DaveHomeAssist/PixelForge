@@ -1,3 +1,5 @@
+import { ChevronDown, ChevronRight } from "lucide-react";
+
 export default function SelectionSection({
   selectedShapeType,
   selectedShapeFields,
@@ -7,6 +9,8 @@ export default function SelectionSection({
   duplicateSelectedShape,
   deleteSelectedShape,
   feedbackClass,
+  collapsed = false,
+  onToggle,
 }) {
   const isLine = selectedShapeType === "line";
   const makeInput = (field, label) => (
@@ -21,14 +25,40 @@ export default function SelectionSection({
       aria-label={label}
     />
   );
+  const makeColorRow = (field, enabledField, label) => (
+    <div className="pf-prop-row">
+      <label className="pf-checkbox-row">
+        <input
+          type="checkbox"
+          checked={!!selectedShapeFields?.[enabledField]}
+          onChange={e => {
+            beginSelectionFieldEdit();
+            handleSelectionFieldInput(enabledField, e.target.checked);
+            commitSelectionFieldEdits();
+          }}
+        />
+        <span>{label}</span>
+      </label>
+      <input
+        className="pf-color-inline"
+        type="color"
+        value={selectedShapeFields?.[field] || "#000000"}
+        disabled={!selectedShapeFields?.[enabledField]}
+        onFocus={beginSelectionFieldEdit}
+        onChange={e => handleSelectionFieldInput(field, e.target.value)}
+        onBlur={commitSelectionFieldEdits}
+        aria-label={`${label} color`}
+      />
+    </div>
+  );
 
   return (
     <div className={`pf-section ${feedbackClass("shape-edit")}`}>
-      <div className="pf-section-head">Selection</div>
-      <div className="pf-section-body">
-        <div className="pf-section-lead">
-          {isLine ? "Edit the selected line endpoints." : "Adjust the selected vector shape numerically or duplicate/delete it."}
-        </div>
+      <button type="button" className="pf-section-head pf-section-toggle" onClick={onToggle} aria-expanded={!collapsed}>
+        <span>Selection</span>
+        {collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+      </button>
+      {!collapsed && <div className="pf-section-body">
         {isLine ? (
           <div className="pf-mini-grid four">
             {makeInput("x1", "Line start X")}
@@ -44,11 +74,17 @@ export default function SelectionSection({
             {makeInput("h", "Shape height")}
           </div>
         )}
+        {!isLine && makeColorRow("fill", "fillOn", "Fill")}
+        {makeColorRow("stroke", "strokeOn", "Stroke")}
+        <div className="pf-prop-row">
+          <span className="pf-prop-label">Stroke Width</span>
+          {makeInput("strokeWidth", "Stroke width")}
+        </div>
         <div className="pf-inline-actions" style={{ marginTop: 12 }}>
           <button className={`pf-layer-abtn ${feedbackClass("shape-duplicate")}`} onClick={duplicateSelectedShape}>Duplicate Shape</button>
           <button className={`pf-layer-abtn ${feedbackClass("shape-delete")}`} onClick={deleteSelectedShape}>Delete Shape</button>
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

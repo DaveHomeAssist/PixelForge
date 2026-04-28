@@ -1,3 +1,4 @@
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { SWATCHES } from "../constants.js";
 
 export default function PaletteSection({
@@ -13,12 +14,16 @@ export default function PaletteSection({
   commitColor,
   feedbackClass,
   fieldFeedbackClass,
+  collapsed = false,
+  onToggle,
 }) {
   return (
     <div className="pf-section">
-      <div className="pf-section-head">Palette</div>
-      <div className="pf-section-body">
-        <div className="pf-section-lead">Click a swatch to set the primary color. Right-click a swatch to assign the secondary color, or edit the hex values directly.</div>
+      <button type="button" className="pf-section-head pf-section-toggle" onClick={onToggle} aria-expanded={!collapsed}>
+        <span>Palette</span>
+        {collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+      </button>
+      {!collapsed && <div className="pf-section-body">
         {recentColors.length > 0 && (
           <div className="pf-recent-row">
             {recentColors.map(color => (
@@ -69,7 +74,7 @@ export default function PaletteSection({
             aria-label="Secondary color hex value"
           />
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

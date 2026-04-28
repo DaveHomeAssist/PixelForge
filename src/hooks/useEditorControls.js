@@ -100,22 +100,44 @@ export default function useEditorControls({
   }, [controlTxRef, getLayer, syncEditor]);
 
   const mutateShapeFieldLive = useCallback((field, rawValue) => {
+    const record = findShapeRecord();
+    if (!record) return;
+    if (field === "fillOn") {
+      record.shape.fill = rawValue ? normalizeHexColor(record.shape.fill || color1, color1) : null;
+      if (controlTxRef.current?.layerId === record.layer.id) controlTxRef.current.dirty = true;
+      syncEditor();
+      return;
+    }
+    if (field === "strokeOn") {
+      record.shape.stroke = rawValue ? normalizeHexColor(record.shape.stroke || color2, color2) : null;
+      if (controlTxRef.current?.layerId === record.layer.id) controlTxRef.current.dirty = true;
+      syncEditor();
+      return;
+    }
+    if (field === "fill" || field === "stroke") {
+      const next = normalizeHexColor(rawValue, field === "fill" ? (record.shape.fill || color1) : (record.shape.stroke || color2));
+      record.shape[field] = next;
+      if (controlTxRef.current?.layerId === record.layer.id) controlTxRef.current.dirty = true;
+      syncEditor();
+      return;
+    }
     const text = `${rawValue ?? ""}`.trim();
     if (!text || text === "-") return;
     const value = Number(text);
     if (!Number.isFinite(value)) return;
-    const record = findShapeRecord();
-    if (!record) return;
     if (record.shape.type === "line") {
-      record.shape[field] = value;
+      if (["x1", "y1", "x2", "y2"].includes(field)) record.shape[field] = value;
+      else if (field === "strokeWidth") record.shape.strokeWidth = Math.max(1, value);
     } else if (field === "x" || field === "y") {
       record.shape[field] = value;
+    } else if (field === "strokeWidth") {
+      record.shape.strokeWidth = Math.max(1, value);
     } else {
       record.shape[field] = Math.max(1, value);
     }
     if (controlTxRef.current?.layerId === record.layer.id) controlTxRef.current.dirty = true;
     syncEditor();
-  }, [controlTxRef, findShapeRecord, syncEditor]);
+  }, [color1, color2, controlTxRef, findShapeRecord, syncEditor]);
 
   const beginLayerOpacityEdit = useCallback(() => {
     if (!activeId || controlTxRef.current?.layerId === activeId) return;

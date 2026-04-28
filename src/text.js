@@ -98,13 +98,13 @@ export function hitText(ctx, layer, px, py) {
 }
 
 export function drawTextSelection(ctx, layer, zoom, textCtx) {
-  const b = getTextBounds(textCtx, layer);
+  const { width, height } = measureText(textCtx, layer);
   ctx.save();
   ctx.strokeStyle = "rgba(25,77,111,0.95)";
   ctx.fillStyle = "#ffffff";
   ctx.lineWidth = 1.5 / zoom;
   ctx.setLineDash([6 / zoom, 4 / zoom]);
-  ctx.strokeRect(b.left, b.top, Math.max(b.width, 1), Math.max(b.height, 1));
+  ctx.strokeRect(0, 0, Math.max(width, 1), Math.max(height, 1));
   ctx.setLineDash([]);
   ctx.restore();
 }

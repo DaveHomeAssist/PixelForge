@@ -1,14 +1,18 @@
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { FONT_FAMILIES } from "../text.js";
 
-export default function TextPropertiesSection({ activeLayer, updateTextLayer, startEditingText }) {
+export default function TextPropertiesSection({ activeLayer, updateTextLayer, startEditingText, collapsed = false, onToggle }) {
   if (!activeLayer || activeLayer.type !== "text") return null;
   const id = activeLayer.id;
   const patch = (partial) => updateTextLayer(id, partial);
 
   return (
     <div className="pf-section">
-      <div className="pf-section-head">Text</div>
-      <div className="pf-section-body">
+      <button type="button" className="pf-section-head pf-section-toggle" onClick={onToggle} aria-expanded={!collapsed}>
+        <span>Text</span>
+        {collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+      </button>
+      {!collapsed && <div className="pf-section-body">
         <button
           type="button"
           className="pf-chip-btn"
@@ -102,7 +106,7 @@ export default function TextPropertiesSection({ activeLayer, updateTextLayer, st
             ))}
           </div>
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

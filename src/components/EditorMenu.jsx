@@ -7,11 +7,14 @@ export default function EditorMenu({
   feedbackClass,
   handleNewDocument,
   handleImportImage,
+  handlePaste,
   onResizeDocument,
   handleLoad,
   handleSave,
-  handleExport,
+  handleOpenExport,
+  handleQuickExport,
   handleOpenAIGenerate,
+  imageActions,
   doUndo,
   doRedo,
   toolMeta,
@@ -47,10 +50,21 @@ export default function EditorMenu({
         <div className="pf-menu-sep" />
         <button className={`pf-mbtn pf-mobile-sheet-only ${feedbackClass("new-doc")}`} onClick={handleNewDocument} title="Create a new document">New</button>
         <button className={`pf-mbtn pf-mobile-sheet-only ${!hasArtwork ? "primary" : ""} ${feedbackClass("import")}`} onClick={handleImportImage} title="Import an image into a new raster layer">Import</button>
+        <button className={`pf-mbtn pf-mobile-sheet-only ${feedbackClass("paste")}`} onClick={handlePaste} title="Paste an image from the system clipboard">Paste</button>
         <button className={`pf-mbtn pf-mobile-sheet-only ${feedbackClass("resize-doc")}`} onClick={onResizeDocument} title="Resize the current document">Resize</button>
         <button className={`pf-mbtn pf-mobile-sheet-only ${feedbackClass("load")}`} onClick={handleLoad} title="Open a saved PixelForge project"><FolderOpen size={12} /> Open</button>
         <button className={`pf-mbtn ${feedbackClass("save")}`} onClick={handleSave} title={saveButtonTitle}>{canUseFileSave ? <Save size={12} /> : <Download size={12} />} {saveButtonLabel}</button>
-        <button className={`pf-mbtn ${hasArtwork ? "primary" : ""} ${feedbackClass("export")}`} onClick={handleExport} title="Export a flattened PNG"><Download size={12} /> Export PNG</button>
+        <button className={`pf-mbtn ${hasArtwork ? "primary" : ""} ${feedbackClass("export")}`} onClick={handleOpenExport} title="Choose export options"><Download size={12} /> Export</button>
+        <button className={`pf-mbtn pf-mobile-sheet-only ${feedbackClass("export")}`} onClick={handleQuickExport} title="Export with last used settings">Last</button>
+        {imageActions && (
+          <>
+            <div className="pf-menu-sep" />
+            <button className="pf-mbtn pf-mobile-sheet-only" onClick={imageActions.crop} disabled={!imageActions.canCrop}>Crop</button>
+            <button className="pf-mbtn pf-mobile-sheet-only" onClick={imageActions.trim}>Trim</button>
+            <button className="pf-mbtn pf-mobile-sheet-only" onClick={() => imageActions.rotate(90)}>Rotate 90</button>
+            <button className="pf-mbtn pf-mobile-sheet-only" onClick={() => imageActions.flip("h")}>Flip H</button>
+          </>
+        )}
         {handleOpenAIGenerate && (
           <button className={`pf-mbtn pf-mobile-sheet-only ${feedbackClass("ai-generate")}`} onClick={handleOpenAIGenerate} title="Generate image with AI" aria-label="Generate with AI">Generate</button>
         )}
@@ -82,10 +96,13 @@ export default function EditorMenu({
             <div className="pf-mobile-menu-grid">
               <button className="pf-mbtn" onClick={() => runMobileAction(handleNewDocument)}>New</button>
               <button className={`pf-mbtn ${!hasArtwork ? "primary" : ""}`} onClick={() => runMobileAction(handleImportImage)}>Import</button>
+              <button className="pf-mbtn" onClick={() => runMobileAction(handlePaste)}>Paste</button>
               <button className="pf-mbtn" onClick={() => runMobileAction(onResizeDocument)}>Resize</button>
               <button className="pf-mbtn" onClick={() => runMobileAction(handleLoad)}><FolderOpen size={12} /> Open</button>
               <button className="pf-mbtn" onClick={() => runMobileAction(handleSave)}>{canUseFileSave ? <Save size={12} /> : <Download size={12} />} {saveButtonLabel}</button>
-              <button className={`pf-mbtn ${hasArtwork ? "primary" : ""}`} onClick={() => runMobileAction(handleExport)}><Download size={12} /> Export</button>
+              <button className={`pf-mbtn ${hasArtwork ? "primary" : ""}`} onClick={() => runMobileAction(handleOpenExport)}><Download size={12} /> Export</button>
+              <button className="pf-mbtn" onClick={() => runMobileAction(handleQuickExport)}>Export Last</button>
+              {imageActions && <button className="pf-mbtn" onClick={() => runMobileAction(imageActions.trim)}>Trim</button>}
               {handleOpenAIGenerate && <button className="pf-mbtn" onClick={() => runMobileAction(handleOpenAIGenerate)}>Generate</button>}
               <button className={`pf-mbtn ${undoN === 0 ? "dis" : ""}`} onClick={() => runMobileAction(doUndo)}><Undo2 size={12} /> Undo</button>
               <button className={`pf-mbtn ${redoN === 0 ? "dis" : ""}`} onClick={() => runMobileAction(doRedo)}><Redo2 size={12} /> Redo</button>

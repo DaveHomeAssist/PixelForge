@@ -13,6 +13,8 @@ import StatusBar from "./components/StatusBar.jsx";
 import TextEditOverlay from "./components/TextEditOverlay.jsx";
 import AISettingsModal from "./components/AISettingsModal.jsx";
 import AIGenerateModal from "./components/AIGenerateModal.jsx";
+import ContextMenu from "./components/ContextMenu.jsx";
+import ExportModal from "./components/ExportModal.jsx";
 import useEditorPrefs from "./hooks/useEditorPrefs.js";
 import useAutosaveRecovery from "./hooks/useAutosaveRecovery.js";
 import useHistory from "./hooks/useHistory.js";
@@ -34,6 +36,8 @@ import {
 } from "./utils.js";
 import { renderEditor } from "./render.js";
 import { commitFloat } from "./marquee.js";
+import { cropToRect, trimTransparent, rotateCanvas, flipCanvas } from "./canvasOps.js";
+import { hitShape } from "./shapes.js";
 
 /* Inlined constants, utilities, shapes, serialization, autosave, and CSS
    have been extracted to their own modules — see imports above. */
@@ -45,6 +49,7 @@ export default function PixelForge() {
   const [brushSize, setBrushSize] = useState(10);
   const [brushOpacity, setBrushOpacity] = useState(1);
   const [brushPreset, setBrushPreset] = useState("soft");
+  const [bucketTolerance, setBucketTolerance] = useState(16);
   const [color1, setColor1] = useState(DEFAULT_PRIMARY);
   const [color2, setColor2] = useState(DEFAULT_SECONDARY);
   const [color1Input, setColor1Input] = useState(DEFAULT_PRIMARY);
@@ -87,6 +92,8 @@ export default function PixelForge() {
   const [editingText, setEditingText] = useState(null); // { layerId } | null
   const [selectionMask, setSelectionMask] = useState(null); // { layerId, rect, floating } | null
   const [aiModal, setAiModal] = useState(null); // null | "generate" | "settings"
+  const [contextMenu, setContextMenu] = useState(null);
+  const [exportOpen, setExportOpen] = useState(false);
 
   /* ─── Refs ─── */
   const cvRef = useRef(null);
@@ -127,6 +134,7 @@ export default function PixelForge() {
   const controlTxRef = useRef(null);
   const bumpScheduledRef = useRef(false);
   const clipboardRef = useRef(null); // { imageData, w, h } | null
+  const longPressRef = useRef(null);
 
   const flash = useCallback((message, tone = "info", ms = 2000) => {
     setToast({ message, tone });
@@ -194,6 +202,9 @@ export default function PixelForge() {
         y1: String(Math.round(shape.y1)),
         x2: String(Math.round(shape.x2)),
         y2: String(Math.round(shape.y2)),
+        stroke: shape.stroke || "",
+        strokeOn: !!shape.stroke,
+        strokeWidth: String(Math.round(shape.strokeWidth || 2)),
       };
     }
     return {
@@ -201,6 +212,11 @@ export default function PixelForge() {
       y: String(Math.round(shape.y)),
       w: String(Math.round(shape.w)),
       h: String(Math.round(shape.h)),
+      fill: shape.fill || "",
+      fillOn: !!shape.fill,
+      stroke: shape.stroke || "",
+      strokeOn: !!shape.stroke,
+      strokeWidth: String(Math.round(shape.strokeWidth || 2)),
     };
   }, []);
 
@@ -260,6 +276,7 @@ export default function PixelForge() {
     strokeW,
     fillOn,
     strokeOn,
+    bucketTolerance,
     color1,
     color2,
     tool,
@@ -270,6 +287,7 @@ export default function PixelForge() {
     setStrokeW,
     setFillOn,
     setStrokeOn,
+    setBucketTolerance,
     setColor1,
     setColor2,
     setDocForm,
@@ -278,6 +296,20 @@ export default function PixelForge() {
   });
   const preferredRasterTool = getToolRequirement(prefs.toolPrefs.lastRasterTool) === "raster" ? prefs.toolPrefs.lastRasterTool : "brush";
   const preferredVectorTool = getToolRequirement(prefs.toolPrefs.lastVectorTool) === "vector" ? prefs.toolPrefs.lastVectorTool : "rect";
+  const isSectionCollapsed = useCallback((sectionId) => !!prefs.uiPrefs.collapsedSections?.[sectionId], [prefs.uiPrefs.collapsedSections]);
+  const toggleSection = useCallback((sectionId) => {
+    updatePrefs(prev => {
+      const collapsedSections = prev.uiPrefs.collapsedSections || {};
+      return mergePrefs(prev, {
+        uiPrefs: {
+          collapsedSections: {
+            ...collapsedSections,
+            [sectionId]: !collapsedSections[sectionId],
+          },
+        },
+      });
+    });
+  }, [updatePrefs]);
 
   const {
     selectTool,
@@ -332,6 +364,7 @@ export default function PixelForge() {
     onImportImageChange,
     handleViewportDrop,
     handleClipboardPaste,
+    handleClipboardRead,
     applyResizeCanvas,
     applyNewDocument,
     recoverDraftProject,
@@ -413,6 +446,7 @@ export default function PixelForge() {
     setBlend,
     renameLayer,
     toggleLock,
+    duplicateLayer,
     duplicateActiveLayer,
     mergeLayerDown,
   } = useLayerOps({
@@ -486,6 +520,7 @@ export default function PixelForge() {
     brushSize,
     brushOpacity,
     brushPreset,
+    bucketTolerance,
     color1,
     color2,
     fillOn,
@@ -546,6 +581,7 @@ export default function PixelForge() {
     flash,
   });
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- mirrors color1 prop into a separate "editing draft" input. Phase 2 refactor target.
   useEffect(() => { setColor1Input(color1); }, [color1]);
   // eslint-disable-next-line react-hooks/set-state-in-effect -- mirrors color2 prop into a separate "editing draft" input. Phase 2 refactor target.
   useEffect(() => { setColor2Input(color2); }, [color2]);
@@ -575,13 +611,21 @@ export default function PixelForge() {
   useEffect(() => () => window.clearTimeout(fieldFeedbackTimer.current), []);
   useEffect(() => { zoomRef.current = zoom; }, [zoom]);
 
+  /* eslint-disable react-hooks/set-state-in-effect -- derives selected-shape hover affordance from pointer and selection state. */
   useEffect(() => {
-    if (!selectedShape) { setHoverHandle(null); return; }
+    if (!selectedShape) {
+      setHoverHandle(null);
+      return;
+    }
     const record = findShapeRecord();
-    if (!record || record.layer.id !== activeId) { setHoverHandle(null); return; }
+    if (!record || record.layer.id !== activeId) {
+      setHoverHandle(null);
+      return;
+    }
     const hoverDocPoint = { x: (ts.current.scrX - pan.x) / zoom, y: (ts.current.scrY - pan.y) / zoom };
     setHoverHandle(getHandleAtPoint(record.shape, hoverDocPoint.x - record.layer.ox, hoverDocPoint.y - record.layer.oy));
   }, [activeId, findShapeRecord, getHandleAtPoint, pan.x, pan.y, selectedShape, tick, zoom]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
     const onBeforeUnload = (e) => {
@@ -787,6 +831,21 @@ export default function PixelForge() {
     triggerFeedback("shape-duplicate", "success");
   }, [canEditLayer, capturePatchSnapshot, commitPatchHistory, findShapeRecord, triggerFeedback]);
 
+  const nudgeSelectedShape = useCallback((dx, dy) => {
+    const record = findShapeRecord();
+    if (!record || !canEditLayer(record.layer, "move this shape")) return;
+    const before = capturePatchSnapshot([record.layer.id], true);
+    if (record.shape.type === "line") {
+      record.shape.x1 += dx; record.shape.y1 += dy;
+      record.shape.x2 += dx; record.shape.y2 += dy;
+    } else {
+      record.shape.x += dx;
+      record.shape.y += dy;
+    }
+    commitPatchHistory(before, [record.layer.id], { selectedShape });
+    triggerFeedback("shape-edit", "success", 140);
+  }, [canEditLayer, capturePatchSnapshot, commitPatchHistory, findShapeRecord, selectedShape, triggerFeedback]);
+
   const copyMarquee = useCallback(() => {
     if (!selectionMask) return;
     const layer = doc.current.layers[selectionMask.layerId];
@@ -883,6 +942,181 @@ export default function PixelForge() {
     triggerFeedback("shape-delete", "success");
   }, [canEditLayer, capturePatchSnapshot, commitPatchHistory, findShapeRecord, triggerFeedback]);
 
+  const moveSelectedShapeOrder = useCallback((direction) => {
+    const record = findShapeRecord();
+    if (!record || !canEditLayer(record.layer, "reorder this shape")) return;
+    const shapes = record.layer.shapes;
+    let target = record.index;
+    if (direction === "front") target = shapes.length - 1;
+    else if (direction === "back") target = 0;
+    else target = clamp(record.index + direction, 0, shapes.length - 1);
+    if (target === record.index) return;
+    const before = capturePatchSnapshot([record.layer.id], true);
+    const [shape] = shapes.splice(record.index, 1);
+    shapes.splice(target, 0, shape);
+    commitPatchHistory(before, [record.layer.id], { selectedShape });
+    syncEditor();
+  }, [canEditLayer, capturePatchSnapshot, commitPatchHistory, findShapeRecord, selectedShape, syncEditor]);
+
+  const selectAllActive = useCallback(() => {
+    const layer = doc.current.layers[activeId];
+    if (!layer) return;
+    if (layer.type === "raster") {
+      setSelectionMask({ layerId: layer.id, rect: { x: 0, y: 0, w: docW, h: docH }, floating: null });
+      setSelectedShape(null);
+      return;
+    }
+    if (layer.type === "vector" && layer.shapes.length) {
+      const shape = layer.shapes[layer.shapes.length - 1];
+      setSelectedShape({ layerId: layer.id, shapeId: shape.id });
+      setSelectionMask(null);
+    }
+  }, [activeId, docH, docW]);
+
+  const applyCanvasOperation = useCallback((operation, label) => {
+    withFullHistory(() => {
+      const result = operation(doc.current, docW, docH);
+      setDocW(result.docW);
+      setDocH(result.docH);
+      setResizeForm(prev => ({ ...prev, width: result.docW, height: result.docH }));
+      setSelectionMask(null);
+      setSelectedShape(null);
+      requestAnimationFrame(() => fitViewTo(result.docW, result.docH));
+      return { docW: result.docW, docH: result.docH, selectedShape: null };
+    });
+    triggerFeedback("image-op", "success", 140);
+    flash(label, "success", 1200);
+  }, [docH, docW, fitViewTo, flash, setResizeForm, triggerFeedback, withFullHistory]);
+
+  const cropSelection = useCallback(() => {
+    if (!selectionMask) return;
+    const layer = doc.current.layers[selectionMask.layerId];
+    const ox = layer?.ox || 0;
+    const oy = layer?.oy || 0;
+    applyCanvasOperation((editorDoc, w, h) => cropToRect(editorDoc, w, h, {
+      x: selectionMask.rect.x + ox,
+      y: selectionMask.rect.y + oy,
+      w: selectionMask.rect.w,
+      h: selectionMask.rect.h,
+    }), "Cropped to selection");
+  }, [applyCanvasOperation, selectionMask]);
+
+  const trimCanvas = useCallback(() => applyCanvasOperation(trimTransparent, "Trimmed transparent edges"), [applyCanvasOperation]);
+  const rotateDocument = useCallback((degrees) => applyCanvasOperation((editorDoc, w, h) => rotateCanvas(editorDoc, w, h, degrees), "Canvas rotated"), [applyCanvasOperation]);
+  const flipDocument = useCallback((axis) => applyCanvasOperation((editorDoc, w, h) => flipCanvas(editorDoc, w, h, axis), "Canvas flipped"), [applyCanvasOperation]);
+
+  const exportWithOptions = useCallback((options) => {
+    const selectionLayer = selectionMask ? doc.current.layers[selectionMask.layerId] : null;
+    const region = options.selectedOnly && selectionMask && selectionLayer
+      ? {
+          x: selectionMask.rect.x + (selectionLayer.ox || 0),
+          y: selectionMask.rect.y + (selectionLayer.oy || 0),
+          w: selectionMask.rect.w,
+          h: selectionMask.rect.h,
+        }
+      : null;
+    handleExport({ ...options, region });
+    updatePrefs(prev => mergePrefs(prev, { docPrefs: { lastExport: options } }));
+    setExportOpen(false);
+  }, [handleExport, selectionMask, updatePrefs]);
+
+  const quickExport = useCallback(() => {
+    exportWithOptions(prefs.docPrefs.lastExport || { format: "png", scale: 1, includeBackground: true, filename: "pixelforge-export" });
+  }, [exportWithOptions, prefs.docPrefs.lastExport]);
+
+  const cancelLongPress = useCallback(() => {
+    if (!longPressRef.current) return;
+    window.clearTimeout(longPressRef.current.timer);
+    longPressRef.current = null;
+  }, []);
+
+  const startLongPress = useCallback((e, openMenu) => {
+    if (e.pointerType !== "touch") return;
+    cancelLongPress();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    longPressRef.current = {
+      startX,
+      startY,
+      timer: window.setTimeout(() => {
+        longPressRef.current = null;
+        openMenu(startX, startY);
+      }, 500),
+    };
+  }, [cancelLongPress]);
+
+  const moveLongPress = useCallback((e) => {
+    const state = longPressRef.current;
+    if (!state) return;
+    if (Math.abs(e.clientX - state.startX) > 5 || Math.abs(e.clientY - state.startY) > 5) cancelLongPress();
+  }, [cancelLongPress]);
+
+  useEffect(() => () => cancelLongPress(), [cancelLongPress]);
+
+  const findShapeAtViewportPoint = useCallback((clientX, clientY) => {
+    const rect = cvRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+    const docX = (clientX - rect.left - pan.x) / zoom;
+    const docY = (clientY - rect.top - pan.y) / zoom;
+    for (const layer of [...layers].reverse()) {
+      if (layer.type !== "vector" || layer.visible === false) continue;
+      const lx = docX - (layer.ox || 0);
+      const ly = docY - (layer.oy || 0);
+      for (let i = layer.shapes.length - 1; i >= 0; i -= 1) {
+        const shape = layer.shapes[i];
+        if (hitShape(shape, lx, ly)) return { layer, shape };
+      }
+    }
+    return null;
+  }, [layers, pan.x, pan.y, zoom]);
+
+  const viewportContextItems = useCallback((shapeSelection = selectedShape) => [
+    ...(shapeSelection ? [
+      { label: "Edit Fill", onClick: () => setMobilePanelTab("selection") },
+      { label: "Edit Stroke", onClick: () => setMobilePanelTab("selection") },
+      { separator: true },
+      { label: "Bring Forward", onClick: () => moveSelectedShapeOrder(1) },
+      { label: "Send Backward", onClick: () => moveSelectedShapeOrder(-1) },
+      { label: "Bring To Front", onClick: () => moveSelectedShapeOrder("front") },
+      { label: "Send To Back", onClick: () => moveSelectedShapeOrder("back") },
+      { separator: true },
+      { label: "Duplicate", onClick: duplicateSelectedShape },
+      { label: "Delete", onClick: deleteSelectedShape, danger: true },
+      { separator: true },
+    ] : []),
+    { label: "Paste", onClick: handleClipboardRead },
+    { label: "Select All", onClick: selectAllActive },
+    { label: "Fit To View", onClick: handleFitView },
+    { separator: true },
+    { label: "New Raster Layer", onClick: () => addLayer("raster") },
+    { label: "New Vector Layer", onClick: () => addLayer("vector") },
+    { separator: true },
+    { label: "Crop To Selection", onClick: cropSelection, disabled: !selectionMask },
+    { label: "Trim Transparent Edges", onClick: trimCanvas },
+  ], [addLayer, cropSelection, deleteSelectedShape, duplicateSelectedShape, handleClipboardRead, handleFitView, moveSelectedShapeOrder, selectAllActive, selectedShape, selectionMask, setMobilePanelTab, trimCanvas]);
+
+  const canMergeLayerDown = useCallback((layerId) => {
+    const index = layers.findIndex(layer => layer.id === layerId);
+    const upper = layers[index];
+    const lower = layers[index - 1];
+    return !!upper && !!lower && upper.type === "raster" && lower.type === "raster";
+  }, [layers]);
+
+  const layerContextItems = useCallback((layerId) => [
+    { label: "Rename", onClick: () => { setActiveId(layerId); flash("Edit the layer name field to rename.", "info", 1200); } },
+    { label: "Duplicate", onClick: () => duplicateLayer(layerId) },
+    { label: "Delete", onClick: () => delLayer(layerId), danger: true, disabled: layers.length <= 1 },
+    { separator: true },
+    { label: "Move Up", onClick: () => moveLayer(layerId, 1) },
+    { label: "Move Down", onClick: () => moveLayer(layerId, -1) },
+    { label: "Move To Top", onClick: () => moveLayer(layerId, "top") },
+    { label: "Move To Bottom", onClick: () => moveLayer(layerId, "bottom") },
+    { separator: true },
+    { label: "Toggle Visibility", onClick: () => toggleVis(layerId) },
+    { label: "Toggle Lock", onClick: () => toggleLock(layerId) },
+    { label: "Merge Down", onClick: () => mergeLayerDown(layerId), disabled: layerId !== activeId || !canMergeLayerDown(layerId) },
+  ], [activeId, canMergeLayerDown, delLayer, duplicateLayer, flash, layers.length, mergeLayerDown, moveLayer, setActiveId, toggleLock, toggleVis]);
+
   /* ─── Keyboard ─── */
   useEffect(() => {
     const kd = (e) => {
@@ -901,6 +1135,24 @@ export default function PixelForge() {
         else duplicateActiveLayer();
         return;
       }
+      if ((e.ctrlKey || e.metaKey) && key === "j" && !typing) {
+        e.preventDefault();
+        if (selectedShape) duplicateSelectedShape();
+        else duplicateActiveLayer();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && key === "a" && !typing) {
+        e.preventDefault();
+        if (e.shiftKey) {
+          setSelectionMask(null);
+          clearSelection();
+        } else {
+          selectAllActive();
+        }
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "]") { e.preventDefault(); if (activeId) moveLayer(activeId, "top"); return; }
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "[") { e.preventDefault(); if (activeId) moveLayer(activeId, "bottom"); return; }
       // Marquee clipboard ops (before paste — paste is handled by the document-level listener)
       if (!typing && selectionMask) {
         if ((e.ctrlKey || e.metaKey) && key === "c") {
@@ -915,7 +1167,7 @@ export default function PixelForge() {
         }
       }
       if (typing) return;
-      const sc = { v:"move", m:"marquee", b:"brush", e:"eraser", r:"rect", o:"ellipse", l:"line", t:"text", i:"eyedropper" };
+      const sc = { v:"move", m:"marquee", b:"brush", e:"eraser", g:"bucket", r:"rect", o:"ellipse", l:"line", t:"text", i:"eyedropper" };
       if (!e.ctrlKey && !e.metaKey && !e.altKey && sc[key]) selectTool(sc[key]);
       if (!e.ctrlKey && !e.metaKey && !e.altKey && key === "x" && !selectionMask) swapColors();
       if (e.key === "Escape") {
@@ -937,6 +1189,13 @@ export default function PixelForge() {
         const dy = e.key === "ArrowUp" ? -step : e.key === "ArrowDown" ? step : 0;
         nudgeMarquee(dx, dy);
       }
+      if (!selectionMask && selectedShape && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+        e.preventDefault();
+        const step = e.shiftKey ? 10 : 1;
+        const dx = e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0;
+        const dy = e.key === "ArrowUp" ? -step : e.key === "ArrowDown" ? step : 0;
+        nudgeSelectedShape(dx, dy);
+      }
       if (!selectionMask && !selectedShape && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
         e.preventDefault();
         const step = e.shiftKey ? 64 : 16;
@@ -950,7 +1209,7 @@ export default function PixelForge() {
     const ku = (e) => { if (e.code === "Space") { space.current = false; setIsSpaceHeld(false); } };
     window.addEventListener("keydown", kd); window.addEventListener("keyup", ku);
     return () => { window.removeEventListener("keydown", kd); window.removeEventListener("keyup", ku); };
-  }, [clearSelection, copyMarquee, cutMarquee, deleteMarquee, deleteSelectedShape, duplicateActiveLayer, duplicateSelectedShape, escapeMarquee, handleFitView, handleRedo, handleSave, handleUndo, nudgeMarquee, selectTool, selectedShape, selectionMask, swapColors, zoomIn, zoomOut]);
+  }, [activeId, clearSelection, copyMarquee, cutMarquee, deleteMarquee, deleteSelectedShape, duplicateActiveLayer, duplicateSelectedShape, escapeMarquee, handleFitView, handleRedo, handleSave, handleUndo, moveLayer, nudgeMarquee, nudgeSelectedShape, selectAllActive, selectTool, selectedShape, selectionMask, swapColors, zoomIn, zoomOut]);
 
   function commitActiveLayerName() {
     if (!activeId) return;
@@ -1067,11 +1326,20 @@ export default function PixelForge() {
         feedbackClass={feedbackClass}
         handleNewDocument={openNewDocument}
         handleImportImage={handleImportImage}
+        handlePaste={handleClipboardRead}
         onResizeDocument={openResizeDocument}
         handleLoad={handleLoad}
         handleSave={handleSave}
-        handleExport={handleExport}
+        handleOpenExport={() => setExportOpen(true)}
+        handleQuickExport={quickExport}
         handleOpenAIGenerate={() => setAiModal("generate")}
+        imageActions={{
+          canCrop: !!selectionMask,
+          crop: cropSelection,
+          trim: trimCanvas,
+          rotate: rotateDocument,
+          flip: flipDocument,
+        }}
         doUndo={handleUndo}
         doRedo={handleRedo}
         toolMeta={toolMeta}
@@ -1129,8 +1397,38 @@ export default function PixelForge() {
 
         {/* ── Canvas Viewport ── */}
         <div ref={vpRef} className={`pf-viewport ${isDragHover ? "pf-viewport-drag-hover" : ""}`} style={{ cursor: cursorStyle }}
-          onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp} onPointerCancel={onUp}
-          onContextMenu={e => e.preventDefault()}
+          onPointerDown={e => {
+            onDown(e);
+            startLongPress(e, (x, y) => {
+              const record = findShapeAtViewportPoint(x, y);
+              const shapeSelection = record ? { layerId: record.layer.id, shapeId: record.shape.id } : selectedShape;
+              if (record) setSelectedShape(shapeSelection);
+              setContextMenu({ x, y, items: viewportContextItems(shapeSelection) });
+            });
+          }}
+          onPointerMove={e => {
+            onMove(e);
+            moveLongPress(e);
+          }}
+          onPointerUp={e => {
+            onUp(e);
+            cancelLongPress();
+          }}
+          onPointerLeave={e => {
+            onUp(e);
+            cancelLongPress();
+          }}
+          onPointerCancel={e => {
+            onUp(e);
+            cancelLongPress();
+          }}
+          onContextMenu={e => {
+            e.preventDefault();
+            const record = findShapeAtViewportPoint(e.clientX, e.clientY);
+            const shapeSelection = record ? { layerId: record.layer.id, shapeId: record.shape.id } : selectedShape;
+            if (record) setSelectedShape(shapeSelection);
+            setContextMenu({ x: e.clientX, y: e.clientY, items: viewportContextItems(shapeSelection) });
+          }}
           onDragOver={e => {
             const types = Array.from(e.dataTransfer?.types || []);
             if (!types.includes("Files")) return;
@@ -1235,12 +1533,16 @@ export default function PixelForge() {
               setBrushOpacity={setBrushOpacity}
               brushPreset={brushPreset}
               setBrushPreset={setBrushPreset}
+              bucketTolerance={bucketTolerance}
+              setBucketTolerance={setBucketTolerance}
               fillOn={fillOn}
               setFillOn={setFillOn}
               strokeOn={strokeOn}
               setStrokeOn={setStrokeOn}
               strokeW={strokeW}
               setStrokeW={setStrokeW}
+              collapsed={isSectionCollapsed("tool")}
+              onToggle={() => toggleSection("tool")}
             />
           )}
 
@@ -1254,6 +1556,8 @@ export default function PixelForge() {
               duplicateSelectedShape={duplicateSelectedShape}
               deleteSelectedShape={deleteSelectedShape}
               feedbackClass={feedbackClass}
+              collapsed={isSectionCollapsed("selection")}
+              onToggle={() => toggleSection("selection")}
             />
           )}
 
@@ -1262,6 +1566,8 @@ export default function PixelForge() {
               activeLayer={activeLayer}
               updateTextLayer={updateTextLayer}
               startEditingText={id => setEditingText({ layerId: id })}
+              collapsed={isSectionCollapsed("text")}
+              onToggle={() => toggleSection("text")}
             />
           )}
 
@@ -1280,6 +1586,8 @@ export default function PixelForge() {
               commitColor={commitColor}
               feedbackClass={feedbackClass}
               fieldFeedbackClass={fieldFeedbackClass}
+              collapsed={isSectionCollapsed("palette")}
+              onToggle={() => toggleSection("palette")}
             />
           )}
 
@@ -1319,6 +1627,16 @@ export default function PixelForge() {
               onLayerDragLeave={onLayerDragLeave}
               onLayerDrop={onLayerDrop}
               toggleVis={toggleVis}
+              onLayerContextMenu={(e, layerId) => {
+                e.preventDefault();
+                setContextMenu({ x: e.clientX, y: e.clientY, items: layerContextItems(layerId) });
+              }}
+              onLayerLongPressStart={(e, layerId) => {
+                startLongPress(e, (x, y) => setContextMenu({ x, y, items: layerContextItems(layerId) }));
+              }}
+              onLayerLongPressCancel={cancelLongPress}
+              collapsed={isSectionCollapsed("layers")}
+              onToggle={() => toggleSection("layers")}
             />
           )}
         </div>
@@ -1336,6 +1654,23 @@ export default function PixelForge() {
 
       {/* ── Toast ── */}
       {toast && <div className={`pf-toast ${toast.tone || "info"}`}>{toast.message}</div>}
+
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={contextMenu.items}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
+
+      <ExportModal
+        open={exportOpen}
+        initialOptions={prefs.docPrefs.lastExport}
+        selectionAvailable={!!selectionMask}
+        onClose={() => setExportOpen(false)}
+        onExport={exportWithOptions}
+      />
 
       <NewDocumentModal
         open={modal === "new-document"}

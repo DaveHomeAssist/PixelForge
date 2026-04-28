@@ -36,7 +36,12 @@ async function renderEditorApp() {
   await act(async () => {
     await new Promise(resolve => requestAnimationFrame(resolve));
   });
-  await waitFor(() => expect(screen.getByText("144%")).toBeTruthy());
+  await waitFor(() => expect(renderEditor).toHaveBeenCalled());
+  await waitFor(() => expect(latestRenderArgs().zoom).toBeLessThan(1));
+}
+
+function latestRenderArgs() {
+  return [...renderEditor.mock.calls].reverse().find(([args]) => args?.pan)?.[0];
 }
 
 describe("PixelForge keyboard shortcuts", () => {
@@ -54,33 +59,35 @@ describe("PixelForge keyboard shortcuts", () => {
 
   it("fits the document with Cmd+0", async () => {
     await renderEditorApp();
+    const initialZoom = latestRenderArgs().zoom;
 
     fireEvent.keyDown(window, { key: "=", metaKey: true });
-    await waitFor(() => expect(screen.getByText("180%")).toBeTruthy());
+    await waitFor(() => expect(latestRenderArgs().zoom).toBeGreaterThan(initialZoom));
 
     fireEvent.keyDown(window, { key: "0", metaKey: true });
 
-    await waitFor(() => expect(screen.getByText("144%")).toBeTruthy());
+    await waitFor(() => expect(latestRenderArgs().zoom).toBeCloseTo(initialZoom));
   });
 
   it("zooms in with Cmd+= and zooms out with Cmd+-", async () => {
     await renderEditorApp();
+    const initialZoom = latestRenderArgs().zoom;
 
     fireEvent.keyDown(window, { key: "=", metaKey: true });
-    await waitFor(() => expect(screen.getByText("180%")).toBeTruthy());
+    await waitFor(() => expect(latestRenderArgs().zoom).toBeCloseTo(initialZoom * 1.25));
 
     fireEvent.keyDown(window, { key: "-", metaKey: true });
-    await waitFor(() => expect(screen.getByText("144%")).toBeTruthy());
+    await waitFor(() => expect(latestRenderArgs().zoom).toBeCloseTo(initialZoom));
   });
 
   it("pans the viewport with ArrowRight when nothing is selected", async () => {
     await renderEditorApp();
-    const initialPan = [...renderEditor.mock.calls].reverse().find(([args]) => args?.pan)?.[0].pan;
+    const initialPan = latestRenderArgs().pan;
 
     fireEvent.keyDown(window, { key: "ArrowRight" });
 
     await waitFor(() => {
-      const latestPan = [...renderEditor.mock.calls].reverse().find(([args]) => args?.pan)?.[0].pan;
+      const latestPan = latestRenderArgs().pan;
       expect(latestPan.x).toBe(initialPan.x - 16);
     });
   });

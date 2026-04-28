@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 
 const PROJECT = { id: "pixel-forge", name: "PixelForge" };
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 const STALE_AFTER_MINUTES = 1440; // 24h
 
 const __filename = fileURLToPath(import.meta.url);

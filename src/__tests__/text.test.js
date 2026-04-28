@@ -7,16 +7,23 @@ import {
   measureText,
   hitText,
   getTextBounds,
+  drawTextSelection,
 } from "../text.js";
 
 function makeCtx(perCharWidth = 10) {
+  const calls = [];
   return {
+    calls,
     font: "",
     textBaseline: "",
     textAlign: "",
     fillStyle: "",
+    strokeStyle: "",
+    lineWidth: 0,
     save() {}, restore() {},
     fillText() {},
+    setLineDash() {},
+    strokeRect(...args) { calls.push(["strokeRect", ...args]); },
     measureText(str) { return { width: String(str || "").length * perCharWidth }; },
   };
 }
@@ -75,5 +82,14 @@ describe("hitText", () => {
     const b = getTextBounds(ctx, layer);
     expect(hitText(ctx, layer, b.left + 1, b.top + 1)).toBe(true);
     expect(hitText(ctx, layer, b.right + 10, b.bottom + 10)).toBe(false);
+  });
+});
+
+describe("drawTextSelection", () => {
+  it("draws local bounds when the caller has already translated to the text layer", () => {
+    const ctx = makeCtx(10);
+    const layer = { ...DEFAULT_TEXT_LAYER, text: "hi", fontSize: 20, ox: 100, oy: 80 };
+    drawTextSelection(ctx, layer, 1, ctx);
+    expect(ctx.calls).toContainEqual(["strokeRect", 0, 0, 20, 24]);
   });
 });

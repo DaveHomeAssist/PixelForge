@@ -34,6 +34,7 @@ export default function useEditorPrefs({
   strokeW,
   fillOn,
   strokeOn,
+  bucketTolerance,
   color1,
   color2,
   tool,
@@ -44,6 +45,7 @@ export default function useEditorPrefs({
   setStrokeW,
   setFillOn,
   setStrokeOn,
+  setBucketTolerance = () => {},
   setColor1,
   setColor2,
   setDocForm,
@@ -81,6 +83,7 @@ export default function useEditorPrefs({
     setStrokeW(p.toolPrefs.strokeWidth || 2);
     setFillOn(p.toolPrefs.fillOn ?? true);
     setStrokeOn(p.toolPrefs.strokeOn ?? true);
+    setBucketTolerance(p.toolPrefs.bucketTolerance ?? 16);
     setColor1(p.toolPrefs.recentColors?.[0] || DEFAULT_PRIMARY);
     setColor2(p.toolPrefs.recentColors?.[1] || DEFAULT_SECONDARY);
     setDocForm(p.docPrefs.lastNewDoc || { width: DEFAULT_W, height: DEFAULT_H, background: DEFAULT_BG });
@@ -101,6 +104,7 @@ export default function useEditorPrefs({
     setMobilePanelTab,
     setResizeForm,
     setStrokeOn,
+    setBucketTolerance,
     setStrokeW,
   ]);
 
@@ -132,6 +136,7 @@ export default function useEditorPrefs({
           strokeW: loaded.toolPrefs.strokeWidth ?? strokeW,
           fillOn: loaded.toolPrefs.fillOn ?? fillOn,
           strokeOn: loaded.toolPrefs.strokeOn ?? strokeOn,
+          bucketTolerance: loaded.toolPrefs.bucketTolerance ?? bucketTolerance,
           color1: loaded.toolPrefs.recentColors?.[0] ?? color1,
           color2: loaded.toolPrefs.recentColors?.[1] ?? color2,
           tool,
@@ -150,6 +155,7 @@ export default function useEditorPrefs({
       prev.strokeW !== strokeW ||
       prev.fillOn !== fillOn ||
       prev.strokeOn !== strokeOn ||
+      prev.bucketTolerance !== bucketTolerance ||
       prev.color1 !== color1 ||
       prev.color2 !== color2 ||
       prev.tool !== tool ||
@@ -158,7 +164,7 @@ export default function useEditorPrefs({
 
     if (!changed) return;
 
-    prevSyncRef.current = { brushSize, brushOpacity, brushPreset, strokeW, fillOn, strokeOn, color1, color2, tool, mobilePanelTab, brushSizeTool: brushSize };
+    prevSyncRef.current = { brushSize, brushOpacity, brushPreset, strokeW, fillOn, strokeOn, bucketTolerance, color1, color2, tool, mobilePanelTab, brushSizeTool: brushSize };
 
     updatePrefs(current => {
       let next = current;
@@ -169,10 +175,11 @@ export default function useEditorPrefs({
         current.toolPrefs.brushPreset !== brushPreset ||
         current.toolPrefs.strokeWidth !== strokeW ||
         current.toolPrefs.fillOn !== fillOn ||
-        current.toolPrefs.strokeOn !== strokeOn
+        current.toolPrefs.strokeOn !== strokeOn ||
+        current.toolPrefs.bucketTolerance !== bucketTolerance
       ) {
         next = mergePrefs(next, {
-          toolPrefs: { brushSize, brushOpacity, brushPreset, strokeWidth: strokeW, fillOn, strokeOn },
+          toolPrefs: { brushSize, brushOpacity, brushPreset, strokeWidth: strokeW, fillOn, strokeOn, bucketTolerance },
         });
       }
       // Recent colors
@@ -197,7 +204,7 @@ export default function useEditorPrefs({
       }
       return next;
     });
-  }, [brushOpacity, brushPreset, brushSize, color1, color2, fillOn, mobilePanelTab, strokeOn, strokeW, tool, updatePrefs]);
+  }, [brushOpacity, brushPreset, brushSize, bucketTolerance, color1, color2, fillOn, mobilePanelTab, strokeOn, strokeW, tool, updatePrefs]);
 
   return {
     prefs,

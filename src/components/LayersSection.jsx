@@ -1,5 +1,5 @@
 import {
-  Eye, EyeOff, Plus, Trash2, ChevronUp, ChevronDown, Image, Square,
+  Eye, EyeOff, Plus, Trash2, ChevronUp, ChevronDown, ChevronRight, Image, Square,
 } from "lucide-react";
 import { BLENDS } from "../constants.js";
 
@@ -37,14 +37,22 @@ export default function LayersSection({
   onLayerDragLeave,
   onLayerDrop,
   toggleVis,
+  onLayerContextMenu,
+  onLayerLongPressStart,
+  onLayerLongPressCancel,
+  collapsed = false,
+  onToggle,
 }) {
   return (
     <div className={`pf-section ${feedbackClass("layers")}`} style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      <div className="pf-section-head">
+      <button type="button" className="pf-section-head pf-section-toggle" onClick={onToggle} aria-expanded={!collapsed}>
         <span>Layers</span>
-        <span style={{ fontSize: 8, color: "#95a1a9" }}>{layers.length}</span>
-      </div>
-      {activeLayer && (
+        <span className="pf-section-head-meta">
+          <span style={{ fontSize: 8, color: "#95a1a9" }}>{layers.length}</span>
+          {collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+        </span>
+      </button>
+      {!collapsed && activeLayer && (
         <div className="pf-layer-row">
           <div className="pf-inline-actions">
             <input
@@ -63,15 +71,15 @@ export default function LayersSection({
           </div>
         </div>
       )}
-      <div className="pf-layer-actions">
+      {!collapsed && <div className="pf-layer-actions">
         <button className={`pf-layer-abtn ${feedbackClass("layer-add-raster")}`} onClick={() => addLayer("raster")} title="Add raster layer"><Plus size={10} /><Image size={10} /> Raster</button>
         <button className={`pf-layer-abtn ${feedbackClass("layer-add-vector")}`} onClick={() => addLayer("vector")} title="Add vector layer"><Plus size={10} /><Square size={10} /> Vector</button>
         <button className={`pf-layer-abtn ${feedbackClass("layer-delete")}`} onClick={() => activeId && delLayer(activeId)} disabled={!activeId || layers.length <= 1} title="Delete active layer"><Trash2 size={10} /></button>
         <button className={`pf-layer-abtn ${feedbackClass("layer-up")}`} onClick={() => activeId && moveLayer(activeId, 1)} disabled={!canMoveUp} title="Move layer up"><ChevronUp size={10} /></button>
         <button className={`pf-layer-abtn ${feedbackClass("layer-down")}`} onClick={() => activeId && moveLayer(activeId, -1)} disabled={!canMoveDown} title="Move layer down"><ChevronDown size={10} /></button>
-      </div>
+      </div>}
 
-      {activeLayer && (
+      {!collapsed && activeLayer && (
         <div className="pf-layer-controls">
           <select className="pf-select" style={{ width: 124 }} value={activeLayer.blend} onChange={e => setBlend(activeId, e.target.value)} aria-label="Blend mode">
             {BLENDS.map(blend => <option key={blend} value={blend}>{blend === "source-over" ? "Normal" : blend}</option>)}
@@ -92,7 +100,7 @@ export default function LayersSection({
         </div>
       )}
 
-      <div className="pf-layers-list">
+      {!collapsed && <div className="pf-layers-list">
         {[...layers].reverse().map(layer => (
           <div
             key={layer.id}
@@ -105,6 +113,11 @@ export default function LayersSection({
             onDragOver={e => e.preventDefault()}
             onDragLeave={() => onLayerDragLeave(layer.id)}
             onDrop={() => onLayerDrop(layer.id)}
+            onContextMenu={e => onLayerContextMenu?.(e, layer.id)}
+            onPointerDown={e => onLayerLongPressStart?.(e, layer.id)}
+            onPointerMove={onLayerLongPressCancel}
+            onPointerUp={onLayerLongPressCancel}
+            onPointerCancel={onLayerLongPressCancel}
           >
             <button className={`pf-layer-vis ${feedbackClass(`layer-visibility-${layer.id}`)}`} onClick={e => { e.stopPropagation(); toggleVis(layer.id); }} title={layer.visible ? "Hide layer" : "Show layer"}>
               {layer.visible ? <Eye size={12} /> : <EyeOff size={12} />}
@@ -126,7 +139,7 @@ export default function LayersSection({
             </button>
           </div>
         ))}
-      </div>
+      </div>}
     </div>
   );
 }

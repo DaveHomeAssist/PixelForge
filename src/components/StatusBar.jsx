@@ -35,7 +35,7 @@ export default function StatusBar({
       {isCoarsePointer ? (
         <button className="pf-status-help" type="button" onClick={() => setHelpOpen(true)} aria-label="Open gesture help">?</button>
       ) : (
-        <span className="pf-status-hints">Space drag pans · Scroll zooms · X swaps colors · [ ] resizes brush</span>
+        <span className="pf-status-hints">Space drag pans · Scroll zooms · Cmd+V pastes · X swaps colors · [ ] resizes brush</span>
       )}
       {helpOpen && (
         <div className="pf-help-sheet" role="dialog" aria-modal="true" aria-label="Canvas help">
@@ -46,7 +46,7 @@ export default function StatusBar({
             </div>
             <div className="pf-modal-body">
               <div className="pf-help-row"><strong>Touch</strong><span>Drag one finger to pan. Pinch with two fingers to zoom.</span></div>
-              <div className="pf-help-row"><strong>Desktop</strong><span>Hold Space and drag to pan. Scroll to zoom. X swaps colors. [ ] changes brush size.</span></div>
+              <div className="pf-help-row"><strong>Desktop</strong><span>Hold Space and drag to pan. Scroll to zoom. Cmd+V pastes. X swaps colors. [ ] changes brush size.</span></div>
             </div>
           </div>
         </div>

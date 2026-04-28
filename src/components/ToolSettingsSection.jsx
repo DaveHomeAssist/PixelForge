@@ -1,3 +1,4 @@
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { BRUSH_PRESETS } from "../brushes.js";
 
 export default function ToolSettingsSection({
@@ -17,17 +18,24 @@ export default function ToolSettingsSection({
   setBrushOpacity,
   brushPreset,
   setBrushPreset,
+  bucketTolerance,
+  setBucketTolerance,
   fillOn,
   setFillOn,
   strokeOn,
   setStrokeOn,
   strokeW,
   setStrokeW,
+  collapsed = false,
+  onToggle,
 }) {
   return (
     <div className="pf-section">
-      <div className="pf-section-head">Tool Settings</div>
-      <div className="pf-section-body">
+      <button type="button" className="pf-section-head pf-section-toggle" onClick={onToggle} aria-expanded={!collapsed}>
+        <span>Tool Settings</span>
+        {collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+      </button>
+      {!collapsed && <div className="pf-section-body">
         <div className="pf-tool-summary">
           <div>
             <div className="pf-tool-summary-title">{panelToolCopy.title}</div>
@@ -55,6 +63,16 @@ export default function ToolSettingsSection({
                 </button>
               </>
             )}
+          </div>
+        )}
+
+        {tool === "bucket" && (
+          <div className="pf-prop-row">
+            <span className="pf-prop-label">Tolerance</span>
+            <div className="pf-prop-val" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <input type="range" className="pf-slider" min={0} max={255} value={bucketTolerance} onChange={e => setBucketTolerance(+e.target.value)} />
+              <span style={{ fontSize: 10, color: "#6c7a84", minWidth: 28, textAlign: "right" }}>{bucketTolerance}</span>
+            </div>
           </div>
         )}
 
@@ -116,7 +134,7 @@ export default function ToolSettingsSection({
             <div className="pf-field-help">Primary color fills the shape. Secondary color is used for outlines when stroke is enabled.</div>
           </>
         )}
-      </div>
+      </div>}
     </div>
   );
 }

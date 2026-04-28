@@ -7,6 +7,18 @@ import {
 } from "../shapes.js";
 import { stampBrush, drawBrushSegment, getEffectiveRadius } from "../brushes.js";
 import { normalizeRect, clipRectToLayer, pointInRect, liftSelection, commitFloat } from "../marquee.js";
+import { floodFill } from "../floodFill.js";
+
+function hexToRgba(hex) {
+  const raw = hex.replace("#", "");
+  const full = raw.length === 3 ? raw.split("").map(char => char + char).join("") : raw;
+  return [
+    parseInt(full.slice(0, 2), 16) || 0,
+    parseInt(full.slice(2, 4), 16) || 0,
+    parseInt(full.slice(4, 6), 16) || 0,
+    255,
+  ];
+}
 
 export default function useCanvasInteractions({
   cvRef,
@@ -24,6 +36,7 @@ export default function useCanvasInteractions({
   brushSize,
   brushOpacity,
   brushPreset,
+  bucketTolerance,
   color1,
   fillOn,
   strokeOn,
@@ -176,6 +189,28 @@ export default function useCanvasInteractions({
       return;
     }
 
+    if (tool === "bucket") {
+      tracker.down = false;
+      if (!canEditLayer(layer, "bucket fill this layer")) return;
+      if (layer.type !== "raster") {
+        triggerFeedback("tool-bucket", "error");
+        flash("Bucket fill works on raster layers", "error");
+        return;
+      }
+      const localX = Math.floor(point.x - layer.ox);
+      const localY = Math.floor(point.y - layer.oy);
+      if (localX < 0 || localY < 0 || localX >= layer.canvas.width || localY >= layer.canvas.height) return;
+      const before = capturePatchSnapshot([layer.id]);
+      const ctx = layer.canvas.getContext("2d");
+      const imageData = ctx.getImageData(0, 0, layer.canvas.width, layer.canvas.height);
+      ctx.putImageData(floodFill(imageData, localX, localY, hexToRgba(color1), bucketTolerance), 0, 0);
+      layer.contentHint = "edited";
+      commitPatchHistory(before, [layer.id]);
+      triggerFeedback("tool-bucket", "success", 140);
+      bump();
+      return;
+    }
+
     if (tool === "move") {
       if (layer.type === "vector") {
         const selectedRecord = findShapeRecord();
@@ -293,6 +328,7 @@ export default function useCanvasInteractions({
     brushOpacity,
     brushPreset,
     brushSize,
+    bucketTolerance,
     bump,
     canEditLayer,
     capturePatchSnapshot,
