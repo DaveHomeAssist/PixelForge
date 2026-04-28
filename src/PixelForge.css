@@ -800,9 +800,12 @@
 
 .pf-layer-actions {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
   padding: 0 16px 14px;
+}
+.pf-layer-actions .pf-layer-abtn:nth-child(-n + 2) {
+  grid-column: span 2;
 }
 .pf-layer-abtn {
   min-height: 38px;
@@ -817,6 +820,7 @@
   align-items: center;
   justify-content: center;
   gap: 5px;
+  white-space: nowrap;
   transition: transform var(--pf-dur-hover) var(--pf-ease-standard), border-color var(--pf-dur-hover) var(--pf-ease-standard), background var(--pf-dur-hover) var(--pf-ease-standard), color var(--pf-dur-hover) var(--pf-ease-standard), box-shadow var(--pf-dur-hover) var(--pf-ease-standard);
 }
 .pf-layer-abtn:hover {
