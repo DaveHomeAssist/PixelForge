@@ -19,7 +19,9 @@
     "smoke:dev": "node scripts/verify-runtime.mjs && powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-smoke.ps1 -Mode dev",
     "smoke:preview": "node scripts/verify-runtime.mjs && powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-smoke.ps1 -Mode preview",
     "smoke": "npm run smoke:preview && npm run smoke:dev",
-    "ci": "node scripts/verify-runtime.mjs && npm run lint && npm run test && npm run build"
+    "ci": "node scripts/verify-runtime.mjs && npm run lint && npm run test && npm run build",
+    "smoke:visual": "node scripts/verify-runtime.mjs && node scripts/run-visual-smoke.mjs",
+    "ci:full": "node scripts/verify-runtime.mjs && npm run lint && npm run test && npm run build && npm run smoke:visual"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",
