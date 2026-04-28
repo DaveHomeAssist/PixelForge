@@ -8,6 +8,7 @@ import {
 import { stampBrush, drawBrushSegment, getEffectiveRadius } from "../brushes.js";
 import { normalizeRect, clipRectToLayer, pointInRect, liftSelection, commitFloat } from "../marquee.js";
 import { floodFill } from "../floodFill.js";
+import { findConnectedBounds } from "../imageEffects.js";
 
 function hexToRgba(hex) {
   const raw = hex.replace("#", "");
@@ -31,6 +32,7 @@ export default function useCanvasInteractions({
   activeId,
   selectedShape,
   tool,
+  workspace = {},
   zoom,
   pan,
   brushSize,
@@ -66,10 +68,20 @@ export default function useCanvasInteractions({
 
   const screenToDoc = useCallback((screenX, screenY) => {
     const rect = cvRef.current?.getBoundingClientRect();
-    return rect
-      ? { x: (screenX - rect.left - pan.x) / zoom, y: (screenY - rect.top - pan.y) / zoom }
-      : { x: 0, y: 0 };
-  }, [cvRef, pan.x, pan.y, zoom]);
+    if (!rect) return { x: 0, y: 0 };
+
+    const point = {
+      x: (screenX - rect.left - pan.x) / zoom,
+      y: (screenY - rect.top - pan.y) / zoom,
+    };
+    if (!workspace.snapToGrid) return point;
+
+    const gridSize = 16;
+    return {
+      x: Math.round(point.x / gridSize) * gridSize,
+      y: Math.round(point.y / gridSize) * gridSize,
+    };
+  }, [cvRef, pan.x, pan.y, workspace.snapToGrid, zoom]);
 
   const getHandleAtPoint = useCallback((shape, pointX, pointY) => {
     const radius = Math.max(6, 10 / zoom);
@@ -135,7 +147,7 @@ export default function useCanvasInteractions({
       tsRef.current.scrY = event.clientY - rect.top;
     }
 
-    if (event.button === 1 || (event.button === 0 && spaceRef.current)) {
+    if (event.button === 1 || (event.button === 0 && (spaceRef.current || tool === "hand"))) {
       panningRef.current = true;
       setIsPanning(true);
       panStateRef.current = { x: event.clientX, y: event.clientY, ox: pan.x, oy: pan.y };
@@ -211,6 +223,26 @@ export default function useCanvasInteractions({
       return;
     }
 
+    if (tool === "magic") {
+      tracker.down = false;
+      if (layer.type !== "raster") {
+        triggerFeedback("tool-magic", "error");
+        flash("Magic wand works on raster layers", "error");
+        return;
+      }
+      const localX = Math.floor(point.x - layer.ox);
+      const localY = Math.floor(point.y - layer.oy);
+      if (localX < 0 || localY < 0 || localX >= layer.canvas.width || localY >= layer.canvas.height) return;
+      const imageData = layer.canvas.getContext("2d").getImageData(0, 0, layer.canvas.width, layer.canvas.height);
+      const rect = findConnectedBounds(imageData, localX, localY, bucketTolerance);
+      if (rect && rect.w > 0 && rect.h > 0) {
+        setSelectionMask({ layerId: layer.id, rect, floating: null });
+        setSelectedShape(null);
+        triggerFeedback("tool-magic", "success", 140);
+      }
+      return;
+    }
+
     if (tool === "move") {
       if (layer.type === "vector") {
         const selectedRecord = findShapeRecord();
@@ -259,7 +291,22 @@ export default function useCanvasInteractions({
       return;
     }
 
-    if (["rect", "ellipse", "line"].includes(tool)) {
+    if (tool === "gradient") {
+      if (!canEditLayer(layer, "draw gradients")) {
+        tracker.down = false;
+        return;
+      }
+      if (layer.type !== "raster") {
+        triggerFeedback("tool-gradient", "error");
+        flash("Select a raster layer for gradients", "error");
+        tracker.down = false;
+        return;
+      }
+      tracker.historyBefore = capturePatchSnapshot([layer.id]);
+      return;
+    }
+
+    if (["rect", "ellipse", "line", "polygon", "star", "pen"].includes(tool)) {
       if (!canEditLayer(layer, "draw shapes")) {
         tracker.down = false;
         return;
@@ -275,7 +322,7 @@ export default function useCanvasInteractions({
       return;
     }
 
-    if (tool === "marquee") {
+    if (tool === "marquee" || tool === "lasso") {
       if (!canEditLayer(layer, "select pixels")) { tracker.down = false; return; }
       if (layer.type !== "raster") {
         triggerFeedback("tool-marquee", "error");
@@ -298,7 +345,7 @@ export default function useCanvasInteractions({
         setSelectionMask(null);
       }
       tracker.historyBefore = capturePatchSnapshot([layer.id], true);
-      tracker.preview = { type: "marquee", x: localPoint.x, y: localPoint.y, w: 0, h: 0, layerId: layer.id };
+      tracker.preview = { type: tool === "lasso" ? "lasso" : "marquee", x: localPoint.x, y: localPoint.y, w: 0, h: 0, layerId: layer.id, points: [[localPoint.x, localPoint.y]] };
       return;
     }
 
@@ -334,6 +381,7 @@ export default function useCanvasInteractions({
     capturePatchSnapshot,
     clearSelection,
     color1,
+    commitPatchHistory,
     cvRef,
     docRef,
     findShapeRecord,
@@ -406,9 +454,9 @@ export default function useCanvasInteractions({
         const record = findShapeRecord({ layerId: layer.id, shapeId: tracker.drag.shapeId });
         if (!record || !tracker.startShape) return;
         if (tracker.selectionHandle) {
-          if (record.shape.type === "line") applyLineHandle(record.shape, tracker.selectionHandle, tracker.startShape, dx, dy);
+          if (record.shape.type === "line" || record.shape.type === "path") applyLineHandle(record.shape, tracker.selectionHandle, tracker.startShape, dx, dy);
           else applyRectResize(record.shape, tracker.selectionHandle, tracker.startShape, dx, dy);
-        } else if (record.shape.type === "line") {
+        } else if (record.shape.type === "line" || record.shape.type === "path") {
           record.shape.x1 = tracker.startShape.x1 + dx;
           record.shape.y1 = tracker.startShape.y1 + dy;
           record.shape.x2 = tracker.startShape.x2 + dx;
@@ -422,7 +470,7 @@ export default function useCanvasInteractions({
         layer.oy = tracker.savedOy + dy;
       }
       bump();
-    } else if (["rect", "ellipse"].includes(tool)) {
+    } else if (["rect", "ellipse", "polygon", "star"].includes(tool)) {
       tracker.preview = {
         type: tool,
         x: Math.min(tracker.sx, point.x) - layer.ox,
@@ -435,9 +483,9 @@ export default function useCanvasInteractions({
       };
       tracker.moved = true;
       bump();
-    } else if (tool === "line") {
+    } else if (tool === "line" || tool === "pen") {
       tracker.preview = {
-        type: "line",
+        type: tool === "pen" ? "path" : "line",
         x1: tracker.sx - layer.ox,
         y1: tracker.sy - layer.oy,
         x2: point.x - layer.ox,
@@ -447,7 +495,10 @@ export default function useCanvasInteractions({
       };
       tracker.moved = true;
       bump();
-    } else if (tool === "marquee") {
+    } else if (tool === "gradient") {
+      tracker.moved = true;
+      bump();
+    } else if (tool === "marquee" || tool === "lasso") {
       if (tracker.drag?.mode === "marquee-move" && selectionMask) {
         const localPoint = { x: point.x - layer.ox, y: point.y - layer.oy };
         const dx = localPoint.x - tracker.drag.startLocal.x;
@@ -466,6 +517,17 @@ export default function useCanvasInteractions({
         const localPoint = { x: point.x - layer.ox, y: point.y - layer.oy };
         tracker.preview.w = localPoint.x - tracker.preview.x;
         tracker.preview.h = localPoint.y - tracker.preview.y;
+        tracker.moved = true;
+        bump();
+      } else if (tracker.preview?.type === "lasso") {
+        const localPoint = { x: point.x - layer.ox, y: point.y - layer.oy };
+        tracker.preview.points.push([localPoint.x, localPoint.y]);
+        const xs = tracker.preview.points.map(p => p[0]);
+        const ys = tracker.preview.points.map(p => p[1]);
+        tracker.preview.x = Math.min(...xs);
+        tracker.preview.y = Math.min(...ys);
+        tracker.preview.w = Math.max(...xs) - tracker.preview.x;
+        tracker.preview.h = Math.max(...ys) - tracker.preview.y;
         tracker.moved = true;
         bump();
       }
@@ -510,7 +572,7 @@ export default function useCanvasInteractions({
 
     if ((tool === "brush" || tool === "eraser") && layer?.type === "raster" && tracker.historyBefore) {
       commitRasterStroke(layer.id);
-    } else if (tool === "marquee" && layer?.type === "raster") {
+    } else if ((tool === "marquee" || tool === "lasso") && layer?.type === "raster") {
       if (tracker.drag?.mode === "marquee-move" && selectionMask) {
         // Commit the float back to the canvas at the new position
         if (selectionMask.floating) {
@@ -524,7 +586,7 @@ export default function useCanvasInteractions({
           setSelectionMask({ layerId: layer.id, rect: newRect, floating: null });
           commitPatchHistory(tracker.historyBefore, [layer.id], { selectedShape });
         }
-      } else if (tracker.preview?.type === "marquee") {
+      } else if (tracker.preview?.type === "marquee" || tracker.preview?.type === "lasso") {
         const rect = clipRectToLayer(normalizeRect(tracker.preview), layer);
         if (rect.w < 2 || rect.h < 2) {
           setSelectionMask(null);
@@ -532,7 +594,23 @@ export default function useCanvasInteractions({
           setSelectionMask({ layerId: layer.id, rect, floating: null });
         }
       }
-    } else if (["rect", "ellipse", "line"].includes(tool) && layer?.type === "vector" && tracker.preview) {
+    } else if (tool === "gradient" && layer?.type === "raster" && tracker.historyBefore && tracker.moved) {
+      const ctx = layer.canvas.getContext("2d");
+      const startX = tracker.sx - layer.ox;
+      const startY = tracker.sy - layer.oy;
+      const endX = tracker.lx - layer.ox;
+      const endY = tracker.ly - layer.oy;
+      const gradient = ctx.createLinearGradient(startX, startY, endX, endY);
+      gradient.addColorStop(0, color1);
+      gradient.addColorStop(1, color2);
+      ctx.save();
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, layer.canvas.width, layer.canvas.height);
+      ctx.restore();
+      layer.contentHint = "edited";
+      commitPatchHistory(tracker.historyBefore, [layer.id], { selectedShape });
+      triggerFeedback("tool-gradient", "success", 140);
+    } else if (["rect", "ellipse", "line", "polygon", "star", "pen"].includes(tool) && layer?.type === "vector" && tracker.preview) {
       const shape = ensureShape({ ...tracker.preview });
       layer.shapes.push(shape);
       const nextSelection = { layerId: layer.id, shapeId: shape.id };
@@ -557,6 +635,8 @@ export default function useCanvasInteractions({
   }, [
     activeId,
     bump,
+    color1,
+    color2,
     commitPatchHistory,
     commitRasterStroke,
     docRef,
@@ -567,6 +647,7 @@ export default function useCanvasInteractions({
     setSelectedShape,
     setSelectionMask,
     tool,
+    triggerFeedback,
     tsRef,
   ]);
 

@@ -15,6 +15,10 @@ export default function EditorMenu({
   handleQuickExport,
   handleOpenAIGenerate,
   imageActions,
+  editActions,
+  workspaceActions,
+  openCommandPalette,
+  openHistoryPanel,
   doUndo,
   doRedo,
   toolMeta,
@@ -68,6 +72,8 @@ export default function EditorMenu({
         {handleOpenAIGenerate && (
           <button className={`pf-mbtn pf-mobile-sheet-only ${feedbackClass("ai-generate")}`} onClick={handleOpenAIGenerate} title="Generate image with AI" aria-label="Generate with AI">Generate</button>
         )}
+        <button className="pf-mbtn pf-mobile-sheet-only" onClick={openCommandPalette} title="Open command palette">Commands</button>
+        <button className="pf-mbtn pf-mobile-sheet-only" onClick={openHistoryPanel} title="Open history panel">History</button>
         <div className="pf-menu-sep" />
         <button className={`pf-mbtn pf-mobile-sheet-only ${undoN === 0 ? "dis" : ""} ${feedbackClass("undo")}`} onClick={doUndo} title="Undo (Cmd/Ctrl+Z)"><Undo2 size={12} /> Undo</button>
         <button className={`pf-mbtn pf-mobile-sheet-only ${redoN === 0 ? "dis" : ""} ${feedbackClass("redo")}`} onClick={doRedo} title="Redo (Cmd/Ctrl+Shift+Z or Cmd/Ctrl+Y)"><Redo2 size={12} /> Redo</button>
@@ -85,6 +91,7 @@ export default function EditorMenu({
         <span className="pf-zoom">{(zoom * 100).toFixed(0)}%</span>
         <button className={`pf-mbtn ${feedbackClass("zoom-out")}`} onClick={zoomOut} title="Zoom out"><ZoomOut size={12} /></button>
         <button className={`pf-mbtn ${feedbackClass("zoom-fit")}`} onClick={handleFitView} title="Fit document to view"><Maximize2 size={11} /> Fit</button>
+        <button className="pf-mbtn" onClick={openCommandPalette} title="Command palette (Cmd/Ctrl+K)">Cmd</button>
       </div>
       {mobileOpen && (
         <div className="pf-mobile-menu-backdrop" role="dialog" aria-modal="true" aria-label="Editor menu">
@@ -103,6 +110,10 @@ export default function EditorMenu({
               <button className={`pf-mbtn ${hasArtwork ? "primary" : ""}`} onClick={() => runMobileAction(handleOpenExport)}><Download size={12} /> Export</button>
               <button className="pf-mbtn" onClick={() => runMobileAction(handleQuickExport)}>Export Last</button>
               {imageActions && <button className="pf-mbtn" onClick={() => runMobileAction(imageActions.trim)}>Trim</button>}
+              {editActions && <button className="pf-mbtn" onClick={() => runMobileAction(() => editActions.adjust("grayscale"))}>Grayscale</button>}
+              {workspaceActions && <button className="pf-mbtn" onClick={() => runMobileAction(() => workspaceActions.toggle("showGrid"))}>Grid</button>}
+              <button className="pf-mbtn" onClick={() => runMobileAction(openCommandPalette)}>Commands</button>
+              <button className="pf-mbtn" onClick={() => runMobileAction(openHistoryPanel)}>History</button>
               {handleOpenAIGenerate && <button className="pf-mbtn" onClick={() => runMobileAction(handleOpenAIGenerate)}>Generate</button>}
               <button className={`pf-mbtn ${undoN === 0 ? "dis" : ""}`} onClick={() => runMobileAction(doUndo)}><Undo2 size={12} /> Undo</button>
               <button className={`pf-mbtn ${redoN === 0 ? "dis" : ""}`} onClick={() => runMobileAction(doRedo)}><Redo2 size={12} /> Redo</button>

@@ -118,11 +118,11 @@ export default function ToolSettingsSection({
           </>
         )}
 
-        {["rect", "ellipse", "line"].includes(tool) && (
+        {["rect", "ellipse", "line", "polygon", "star", "pen"].includes(tool) && (
           <>
             <div className="pf-prop-row">
               <label className="pf-checkbox-row"><input type="checkbox" checked={fillOn} onChange={e => setFillOn(e.target.checked)} /><span>Fill</span></label>
-              {tool !== "line" && <label className="pf-checkbox-row" style={{ marginLeft: 12 }}><input type="checkbox" checked={strokeOn} onChange={e => setStrokeOn(e.target.checked)} /><span>Stroke</span></label>}
+              {!["line", "pen"].includes(tool) && <label className="pf-checkbox-row" style={{ marginLeft: 12 }}><input type="checkbox" checked={strokeOn} onChange={e => setStrokeOn(e.target.checked)} /><span>Stroke</span></label>}
             </div>
             <div className="pf-prop-row">
               <span className="pf-prop-label">Width</span>

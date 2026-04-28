@@ -1,5 +1,6 @@
 import {
   MousePointer2, Pencil, Eraser, Square, Circle, Minus, Pipette, Type, SquareDashed, PaintBucket,
+  Lasso, WandSparkles, Blend, Pentagon, Star, PenTool, Hand,
 } from "lucide-react";
 
 export const DEFAULT_W = 1200, DEFAULT_H = 800;
@@ -28,6 +29,11 @@ export const DEFAULT_PREFS = {
   uiPrefs: {
     mobileTab: "next",
     collapsedSections: {},
+    showGrid: false,
+    showRulers: false,
+    snapToGrid: false,
+    pixelPreview: false,
+    darkMode: false,
   },
   toolPrefs: {
     lastRasterTool: "brush",
@@ -39,6 +45,7 @@ export const DEFAULT_PREFS = {
     fillOn: true,
     strokeOn: true,
     bucketTolerance: 16,
+    gradientMode: "linear",
     recentColors: [DEFAULT_PRIMARY, DEFAULT_SECONDARY],
     recentBrushSizes: [6, 10, 24],
   },
@@ -61,13 +68,20 @@ export const DEFAULT_PREFS = {
 
 export const TOOLS = [
   { id: "move", label: "Move", icon: MousePointer2, shortcut: "V", raster: true, vector: true, text: true },
+  { id: "hand", label: "Hand", icon: Hand, shortcut: "H", raster: true, vector: true, text: true },
   { id: "marquee", label: "Marquee Select", icon: SquareDashed, shortcut: "M", raster: true, vector: false, text: false },
+  { id: "lasso", label: "Lasso Select", icon: Lasso, shortcut: "A", raster: true, vector: false, text: false },
+  { id: "magic", label: "Magic Wand", icon: WandSparkles, shortcut: "W", raster: true, vector: false, text: false },
   { id: "brush", label: "Brush", icon: Pencil, shortcut: "B", raster: true, vector: false, text: false },
   { id: "eraser", label: "Eraser", icon: Eraser, shortcut: "E", raster: true, vector: false, text: false },
   { id: "bucket", label: "Bucket Fill", icon: PaintBucket, shortcut: "G", raster: true, vector: false, text: false },
+  { id: "gradient", label: "Gradient", icon: Blend, shortcut: "N", raster: true, vector: false, text: false },
   { id: "rect", label: "Rectangle", icon: Square, shortcut: "R", raster: false, vector: true, text: false },
   { id: "ellipse", label: "Ellipse", icon: Circle, shortcut: "O", raster: false, vector: true, text: false },
+  { id: "polygon", label: "Polygon", icon: Pentagon, shortcut: "P", raster: false, vector: true, text: false },
+  { id: "star", label: "Star", icon: Star, shortcut: "S", raster: false, vector: true, text: false },
   { id: "line", label: "Line", icon: Minus, shortcut: "L", raster: false, vector: true, text: false },
+  { id: "pen", label: "Pen Path", icon: PenTool, shortcut: "K", raster: false, vector: true, text: false },
   { id: "text", label: "Text", icon: Type, shortcut: "T", raster: false, vector: false, text: true },
   { id: "eyedropper", label: "Eyedropper", icon: Pipette, shortcut: "I", raster: true, vector: true, text: true },
 ];
@@ -91,6 +105,21 @@ export const TOOL_COPY = {
     description: "Drag entire layers or reposition vector shapes directly on the canvas.",
     hint: "Hold Space while dragging to pan the viewport.",
   },
+  hand: {
+    title: "Hand",
+    description: "Pan around the canvas without changing artwork.",
+    hint: "Hold Space for temporary hand-pan from any tool.",
+  },
+  lasso: {
+    title: "Lasso",
+    description: "Draw a freehand raster selection and convert it into editable selection bounds.",
+    hint: "Release to capture the bounds. Cmd+C/Cmd+X work on the result.",
+  },
+  magic: {
+    title: "Magic Wand",
+    description: "Select connected pixels that match the clicked color within tolerance.",
+    hint: "Uses the bucket tolerance slider.",
+  },
   brush: {
     title: "Brush",
     description: "Lay down color with a soft round brush for sketching, blocking, and paintover work.",
@@ -106,6 +135,11 @@ export const TOOL_COPY = {
     description: "Fill connected raster regions with the primary color.",
     hint: "Raise tolerance to fill nearby shades in the same click.",
   },
+  gradient: {
+    title: "Gradient",
+    description: "Drag a primary-to-secondary gradient across the active raster layer.",
+    hint: "Set endpoints with the two color wells.",
+  },
   rect: {
     title: "Rectangle",
     description: "Build clean blocks and panels with fill and stroke controls.",
@@ -116,10 +150,25 @@ export const TOOL_COPY = {
     description: "Drop circles and ellipses for softer shapes and framing elements.",
     hint: "Combine fill and stroke for quick badge or icon construction.",
   },
+  polygon: {
+    title: "Polygon",
+    description: "Drag a five-sided vector polygon with fill and stroke controls.",
+    hint: "Adjust fill, stroke, and bounds from Selection.",
+  },
+  star: {
+    title: "Star",
+    description: "Drag a vector star for badges, markers, and callouts.",
+    hint: "Primary fills and secondary outlines.",
+  },
   line: {
     title: "Line",
     description: "Create direct vector strokes for guides, dividers, and layout scaffolding.",
     hint: "Secondary stroke width applies to each line segment.",
+  },
+  pen: {
+    title: "Pen Path",
+    description: "Drag quick editable vector path strokes.",
+    hint: "Use this for custom straight path segments.",
   },
   marquee: {
     title: "Marquee",

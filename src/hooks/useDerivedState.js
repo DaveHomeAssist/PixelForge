@@ -190,7 +190,9 @@ export default function useDerivedState({
           ? "move"
           : tool === "eyedropper"
             ? "crosshair"
-            : ["brush", "eraser", "bucket", "rect", "ellipse", "line"].includes(tool)
+            : tool === "hand"
+              ? "grab"
+              : ["brush", "eraser", "bucket", "gradient", "marquee", "lasso", "magic", "rect", "ellipse", "polygon", "star", "line", "pen"].includes(tool)
               ? "crosshair"
               : "default";
   const showNextSection = visibleNextActions.length > 0;

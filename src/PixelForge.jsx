@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useEffectEvent } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo, useEffectEvent } from "react";
 import "./PixelForge.css";
 import EditorMenu from "./components/EditorMenu.jsx";
 import SelectionSection from "./components/SelectionSection.jsx";
@@ -15,6 +15,8 @@ import AISettingsModal from "./components/AISettingsModal.jsx";
 import AIGenerateModal from "./components/AIGenerateModal.jsx";
 import ContextMenu from "./components/ContextMenu.jsx";
 import ExportModal from "./components/ExportModal.jsx";
+import CommandPalette from "./components/CommandPalette.jsx";
+import HistoryPanel from "./components/HistoryPanel.jsx";
 import useEditorPrefs from "./hooks/useEditorPrefs.js";
 import useAutosaveRecovery from "./hooks/useAutosaveRecovery.js";
 import useHistory from "./hooks/useHistory.js";
@@ -38,6 +40,7 @@ import { renderEditor } from "./render.js";
 import { commitFloat } from "./marquee.js";
 import { cropToRect, trimTransparent, rotateCanvas, flipCanvas } from "./canvasOps.js";
 import { hitShape } from "./shapes.js";
+import { applyImageEffect, blurImageData, sharpenImageData } from "./imageEffects.js";
 
 /* Inlined constants, utilities, shapes, serialization, autosave, and CSS
    have been extracted to their own modules — see imports above. */
@@ -94,6 +97,8 @@ export default function PixelForge() {
   const [aiModal, setAiModal] = useState(null); // null | "generate" | "settings"
   const [contextMenu, setContextMenu] = useState(null);
   const [exportOpen, setExportOpen] = useState(false);
+  const [commandOpen, setCommandOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   /* ─── Refs ─── */
   const cvRef = useRef(null);
@@ -162,6 +167,9 @@ export default function PixelForge() {
         id: l.id, name: l.name, type: l.type, visible: l.visible,
         opacity: l.opacity, blend: l.blend, locked: l.locked,
         ox: l.ox, oy: l.oy,
+        effect: l.effect || null,
+        maskEnabled: !!l.maskEnabled,
+        clipToBelow: !!l.clipToBelow,
         contentHint: l.type === "raster" ? (l.contentHint || "edited") : undefined,
         shapeCount: l.type === "vector" ? l.shapes.length : 0,
       };
@@ -196,7 +204,7 @@ export default function PixelForge() {
 
   const shapeToDraft = useCallback((shape) => {
     if (!shape) return null;
-    if (shape.type === "line") {
+    if (shape.type === "line" || shape.type === "path") {
       return {
         x1: String(Math.round(shape.x1)),
         y1: String(Math.round(shape.y1)),
@@ -296,6 +304,16 @@ export default function PixelForge() {
   });
   const preferredRasterTool = getToolRequirement(prefs.toolPrefs.lastRasterTool) === "raster" ? prefs.toolPrefs.lastRasterTool : "brush";
   const preferredVectorTool = getToolRequirement(prefs.toolPrefs.lastVectorTool) === "vector" ? prefs.toolPrefs.lastVectorTool : "rect";
+  const workspace = useMemo(() => ({
+    showGrid: !!prefs.uiPrefs.showGrid,
+    showRulers: !!prefs.uiPrefs.showRulers,
+    snapToGrid: !!prefs.uiPrefs.snapToGrid,
+    pixelPreview: !!prefs.uiPrefs.pixelPreview,
+    darkMode: !!prefs.uiPrefs.darkMode,
+  }), [prefs.uiPrefs.darkMode, prefs.uiPrefs.pixelPreview, prefs.uiPrefs.showGrid, prefs.uiPrefs.showRulers, prefs.uiPrefs.snapToGrid]);
+  const toggleWorkspacePref = useCallback((key) => {
+    updatePrefs(prev => mergePrefs(prev, { uiPrefs: { [key]: !prev.uiPrefs[key] } }));
+  }, [updatePrefs]);
   const isSectionCollapsed = useCallback((sectionId) => !!prefs.uiPrefs.collapsedSections?.[sectionId], [prefs.uiPrefs.collapsedSections]);
   const toggleSection = useCallback((sectionId) => {
     updatePrefs(prev => {
@@ -515,6 +533,7 @@ export default function PixelForge() {
     activeId,
     selectedShape,
     tool,
+    workspace,
     zoom,
     pan,
     brushSize,
@@ -711,6 +730,7 @@ export default function PixelForge() {
       brushSize,
       screenPoint: { x: ts.current.scrX, y: ts.current.scrY },
       isPanning: panning.current,
+      workspace,
     });
   });
 
@@ -801,7 +821,7 @@ export default function PixelForge() {
   };
 
   function duplicateShape(shape) {
-    if (shape.type === "line") {
+    if (shape.type === "line" || shape.type === "path") {
       return {
         ...cloneShape(shape),
         id: uid(),
@@ -835,7 +855,7 @@ export default function PixelForge() {
     const record = findShapeRecord();
     if (!record || !canEditLayer(record.layer, "move this shape")) return;
     const before = capturePatchSnapshot([record.layer.id], true);
-    if (record.shape.type === "line") {
+    if (record.shape.type === "line" || record.shape.type === "path") {
       record.shape.x1 += dx; record.shape.y1 += dy;
       record.shape.x2 += dx; record.shape.y2 += dy;
     } else {
@@ -1005,6 +1025,62 @@ export default function PixelForge() {
   const rotateDocument = useCallback((degrees) => applyCanvasOperation((editorDoc, w, h) => rotateCanvas(editorDoc, w, h, degrees), "Canvas rotated"), [applyCanvasOperation]);
   const flipDocument = useCallback((axis) => applyCanvasOperation((editorDoc, w, h) => flipCanvas(editorDoc, w, h, axis), "Canvas flipped"), [applyCanvasOperation]);
 
+  const applyActiveRasterImageData = useCallback((label, transform) => {
+    const layer = doc.current.layers[activeId];
+    if (!layer || layer.type !== "raster") {
+      flash(`${label} needs an active raster layer.`, "error");
+      return;
+    }
+    if (!canEditLayer(layer, label.toLowerCase())) return;
+    const before = capturePatchSnapshot([layer.id]);
+    const ctx = layer.canvas.getContext("2d");
+    const imageData = ctx.getImageData(0, 0, layer.canvas.width, layer.canvas.height);
+    ctx.putImageData(transform(imageData), 0, 0);
+    layer.contentHint = "edited";
+    commitPatchHistory(before, [layer.id], { selectedShape });
+    triggerFeedback("image-op", "success", 140);
+    flash(label, "success", 1200);
+  }, [activeId, canEditLayer, capturePatchSnapshot, commitPatchHistory, flash, selectedShape, triggerFeedback]);
+
+  const applyAdjustment = useCallback((effect, amount, label) => {
+    applyActiveRasterImageData(label, imageData => applyImageEffect(imageData, effect, amount));
+  }, [applyActiveRasterImageData]);
+
+  const applyFilter = useCallback((filter) => {
+    const map = {
+      blur: ["Blur applied", blurImageData],
+      sharpen: ["Sharpen applied", sharpenImageData],
+    };
+    const entry = map[filter];
+    if (!entry) return;
+    applyActiveRasterImageData(entry[0], entry[1]);
+  }, [applyActiveRasterImageData]);
+
+  const toggleLayerFlag = useCallback((layerId, field, label) => {
+    const layer = doc.current.layers[layerId || activeId];
+    if (!layer) return;
+    if (!canEditLayer(layer, label.toLowerCase())) return;
+    const before = capturePatchSnapshot([layer.id], true);
+    layer[field] = !layer[field];
+    commitPatchHistory(before, [layer.id], { selectedShape });
+    flash(label, "success", 1200);
+  }, [activeId, canEditLayer, capturePatchSnapshot, commitPatchHistory, flash, selectedShape]);
+
+  const setLayerEffect = useCallback((layerId, effect) => {
+    const layer = doc.current.layers[layerId || activeId];
+    if (!layer) return;
+    if (!canEditLayer(layer, "set layer effect")) return;
+    const before = capturePatchSnapshot([layer.id], true);
+    layer.effect = layer.effect === effect ? null : effect;
+    commitPatchHistory(before, [layer.id], { selectedShape });
+    flash(layer.effect ? `Layer effect: ${effect}` : "Layer effect cleared", "success", 1200);
+  }, [activeId, canEditLayer, capturePatchSnapshot, commitPatchHistory, flash, selectedShape]);
+
+  const makeReferenceLayer = useCallback(() => {
+    addLayer("raster");
+    flash("Reference layer created", "success", 1200);
+  }, [addLayer, flash]);
+
   const exportWithOptions = useCallback((options) => {
     const selectionLayer = selectionMask ? doc.current.layers[selectionMask.layerId] : null;
     const region = options.selectedOnly && selectionMask && selectionLayer
@@ -1115,7 +1191,13 @@ export default function PixelForge() {
     { label: "Toggle Visibility", onClick: () => toggleVis(layerId) },
     { label: "Toggle Lock", onClick: () => toggleLock(layerId) },
     { label: "Merge Down", onClick: () => mergeLayerDown(layerId), disabled: layerId !== activeId || !canMergeLayerDown(layerId) },
-  ], [activeId, canMergeLayerDown, delLayer, duplicateLayer, flash, layers.length, mergeLayerDown, moveLayer, setActiveId, toggleLock, toggleVis]);
+    { separator: true },
+    { label: "Toggle Mask", onClick: () => toggleLayerFlag(layerId, "maskEnabled", "Layer mask toggled") },
+    { label: "Toggle Clipping", onClick: () => toggleLayerFlag(layerId, "clipToBelow", "Clipping mask toggled") },
+    { label: "Drop Shadow", onClick: () => setLayerEffect(layerId, "shadow") },
+    { label: "Glow", onClick: () => setLayerEffect(layerId, "glow") },
+    { label: "Blur Effect", onClick: () => setLayerEffect(layerId, "blur") },
+  ], [activeId, canMergeLayerDown, delLayer, duplicateLayer, flash, layers.length, mergeLayerDown, moveLayer, setActiveId, setLayerEffect, toggleLayerFlag, toggleLock, toggleVis]);
 
   /* ─── Keyboard ─── */
   useEffect(() => {
@@ -1129,6 +1211,7 @@ export default function PixelForge() {
       if ((e.ctrlKey || e.metaKey) && key === "z") { e.preventDefault(); e.shiftKey ? handleRedo() : handleUndo(); return; }
       if ((e.ctrlKey || e.metaKey) && key === "y") { e.preventDefault(); handleRedo(); return; }
       if ((e.ctrlKey || e.metaKey) && key === "s") { e.preventDefault(); handleSave(); return; }
+      if ((e.ctrlKey || e.metaKey) && key === "k") { e.preventDefault(); setCommandOpen(true); return; }
       if ((e.ctrlKey || e.metaKey) && key === "d" && !typing) {
         e.preventDefault();
         if (selectedShape) duplicateSelectedShape();
@@ -1167,7 +1250,7 @@ export default function PixelForge() {
         }
       }
       if (typing) return;
-      const sc = { v:"move", m:"marquee", b:"brush", e:"eraser", g:"bucket", r:"rect", o:"ellipse", l:"line", t:"text", i:"eyedropper" };
+      const sc = { v:"move", h:"hand", m:"marquee", a:"lasso", w:"magic", b:"brush", e:"eraser", g:"bucket", n:"gradient", r:"rect", o:"ellipse", p:"polygon", s:"star", l:"line", k:"pen", t:"text", i:"eyedropper" };
       if (!e.ctrlKey && !e.metaKey && !e.altKey && sc[key]) selectTool(sc[key]);
       if (!e.ctrlKey && !e.metaKey && !e.altKey && key === "x" && !selectionMask) swapColors();
       if (e.key === "Escape") {
@@ -1313,13 +1396,38 @@ export default function PixelForge() {
     setStarterDismissed,
   });
 
+  const commandItems = useMemo(() => [
+    { id: "cmd-bright", label: "Brightness +18", group: "Adjustments", run: () => applyAdjustment("brightness", 18, "Brightness adjusted") },
+    { id: "cmd-contrast", label: "Contrast +28", group: "Adjustments", run: () => applyAdjustment("contrast", 28, "Contrast adjusted") },
+    { id: "cmd-huesat", label: "Saturation +24", group: "Adjustments", run: () => applyAdjustment("hue-sat", 24, "Saturation adjusted") },
+    { id: "cmd-invert", label: "Invert", group: "Adjustments", run: () => applyAdjustment("invert", 0, "Inverted colors") },
+    { id: "cmd-gray", label: "Grayscale", group: "Adjustments", run: () => applyAdjustment("grayscale", 0, "Converted to grayscale") },
+    { id: "cmd-sepia", label: "Sepia", group: "Adjustments", run: () => applyAdjustment("sepia", 0, "Sepia applied") },
+    { id: "cmd-threshold", label: "Threshold", group: "Adjustments", run: () => applyAdjustment("threshold", 128, "Threshold applied") },
+    { id: "cmd-posterize", label: "Posterize", group: "Adjustments", run: () => applyAdjustment("posterize", 4, "Posterize applied") },
+    { id: "cmd-blur", label: "Gaussian Blur", group: "Filters", run: () => applyFilter("blur") },
+    { id: "cmd-sharpen", label: "Sharpen", group: "Filters", run: () => applyFilter("sharpen") },
+    { id: "cmd-grid", label: workspace.showGrid ? "Hide Grid" : "Show Grid", group: "View", run: () => toggleWorkspacePref("showGrid") },
+    { id: "cmd-rulers", label: workspace.showRulers ? "Hide Rulers" : "Show Rulers", group: "View", run: () => toggleWorkspacePref("showRulers") },
+    { id: "cmd-snap", label: workspace.snapToGrid ? "Disable Snap" : "Enable Snap", group: "View", run: () => toggleWorkspacePref("snapToGrid") },
+    { id: "cmd-pixel", label: workspace.pixelPreview ? "Disable Pixel Preview" : "Enable Pixel Preview", group: "View", run: () => toggleWorkspacePref("pixelPreview") },
+    { id: "cmd-dark", label: workspace.darkMode ? "Light Mode" : "Dark Mode", group: "View", run: () => toggleWorkspacePref("darkMode") },
+    { id: "cmd-history", label: "Open History Panel", group: "Workspace", run: () => setHistoryOpen(true) },
+    { id: "cmd-reference", label: "Add Reference Layer", group: "Workspace", run: makeReferenceLayer },
+    { id: "cmd-mask", label: "Toggle Layer Mask", group: "Layer", run: () => toggleLayerFlag(activeId, "maskEnabled", "Layer mask toggled"), disabled: !activeId },
+    { id: "cmd-clip", label: "Toggle Clipping Mask", group: "Layer", run: () => toggleLayerFlag(activeId, "clipToBelow", "Clipping mask toggled"), disabled: !activeId },
+    { id: "cmd-shadow", label: "Toggle Drop Shadow", group: "Layer Effects", run: () => setLayerEffect(activeId, "shadow"), disabled: !activeId },
+    { id: "cmd-glow", label: "Toggle Glow", group: "Layer Effects", run: () => setLayerEffect(activeId, "glow"), disabled: !activeId },
+    { id: "cmd-effect-blur", label: "Toggle Layer Blur", group: "Layer Effects", run: () => setLayerEffect(activeId, "blur"), disabled: !activeId },
+  ], [activeId, applyAdjustment, applyFilter, makeReferenceLayer, setLayerEffect, toggleLayerFlag, toggleWorkspacePref, workspace.darkMode, workspace.pixelPreview, workspace.showGrid, workspace.showRulers, workspace.snapToGrid]);
+
   /* ═══════════════════════════════════════════════════
      JSX
      ═══════════════════════════════════════════════════ */
   return (
-    <div className="pf">
+    <div className={`pf ${workspace.darkMode ? "pf-dark" : ""}`}>
       <input ref={fileRef} type="file" accept=".pforge,.json" style={{ display: "none" }} onChange={onFileChange} />
-      <input ref={importRef} type="file" accept="image/*" style={{ display: "none" }} onChange={onImportImageChange} />
+      <input ref={importRef} type="file" accept="image/*,.svg,image/svg+xml" style={{ display: "none" }} onChange={onImportImageChange} />
 
       {/* ── Menu Bar ── */}
       <EditorMenu
@@ -1340,6 +1448,15 @@ export default function PixelForge() {
           rotate: rotateDocument,
           flip: flipDocument,
         }}
+        editActions={{
+          adjust: (effect) => applyAdjustment(effect, 0, `${effect} applied`),
+          filter: applyFilter,
+        }}
+        workspaceActions={{
+          toggle: toggleWorkspacePref,
+        }}
+        openCommandPalette={() => setCommandOpen(true)}
+        openHistoryPanel={() => setHistoryOpen(true)}
         doUndo={handleUndo}
         doRedo={handleRedo}
         toolMeta={toolMeta}
@@ -1670,6 +1787,21 @@ export default function PixelForge() {
         selectionAvailable={!!selectionMask}
         onClose={() => setExportOpen(false)}
         onExport={exportWithOptions}
+      />
+
+      <CommandPalette
+        open={commandOpen}
+        commands={commandItems}
+        onClose={() => setCommandOpen(false)}
+      />
+
+      <HistoryPanel
+        open={historyOpen}
+        undoN={undoN}
+        redoN={redoN}
+        onUndo={handleUndo}
+        onRedo={handleRedo}
+        onClose={() => setHistoryOpen(false)}
       />
 
       <NewDocumentModal

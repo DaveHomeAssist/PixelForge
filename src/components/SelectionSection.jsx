@@ -12,7 +12,7 @@ export default function SelectionSection({
   collapsed = false,
   onToggle,
 }) {
-  const isLine = selectedShapeType === "line";
+  const isLine = selectedShapeType === "line" || selectedShapeType === "path";
   const makeInput = (field, label) => (
     <input
       className="pf-input"

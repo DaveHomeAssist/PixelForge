@@ -1,7 +1,7 @@
 import { makeCanvas, cloneShape } from "./utils.js";
 
 function shiftShape(shape, dx, dy) {
-  if (shape.type === "line") {
+  if (shape.type === "line" || shape.type === "path") {
     shape.x1 += dx; shape.y1 += dy;
     shape.x2 += dx; shape.y2 += dy;
     return;
@@ -21,7 +21,7 @@ function transformPoint(x, y, w, h, op) {
 
 function transformShape(source, docW, docH, op, ox = 0, oy = 0) {
   const shape = cloneShape(source);
-  if (shape.type === "line") {
+  if (shape.type === "line" || shape.type === "path") {
     const a = transformPoint(shape.x1 + ox, shape.y1 + oy, docW, docH, op);
     const b = transformPoint(shape.x2 + ox, shape.y2 + oy, docW, docH, op);
     shape.x1 = a.x; shape.y1 = a.y;

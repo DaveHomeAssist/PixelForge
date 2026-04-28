@@ -125,7 +125,7 @@ export default function useEditorControls({
     if (!text || text === "-") return;
     const value = Number(text);
     if (!Number.isFinite(value)) return;
-    if (record.shape.type === "line") {
+    if (record.shape.type === "line" || record.shape.type === "path") {
       if (["x1", "y1", "x2", "y2"].includes(field)) record.shape[field] = value;
       else if (field === "strokeWidth") record.shape.strokeWidth = Math.max(1, value);
     } else if (field === "x" || field === "y") {

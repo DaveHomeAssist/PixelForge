@@ -22,7 +22,7 @@ export function drawShapeSelection(ctx, layer, shape, zoom) {
   ctx.fillStyle = "#ffffff";
   ctx.lineWidth = 1.5 / zoom;
   ctx.setLineDash([6 / zoom, 4 / zoom]);
-  if (shape.type === "line") {
+  if (shape.type === "line" || shape.type === "path") {
     ctx.beginPath();
     ctx.moveTo(shape.x1, shape.y1);
     ctx.lineTo(shape.x2, shape.y2);
@@ -58,6 +58,7 @@ export function renderEditor({
   brushSize,
   screenPoint,
   isPanning,
+  workspace = {},
 }) {
   if (!canvas || !viewport) return;
   const vw = viewport.clientWidth;
@@ -94,13 +95,51 @@ export function renderEditor({
   });
   ctx.drawImage(checkerboard, 0, 0);
 
+  if (workspace.showGrid || workspace.pixelPreview) {
+    const grid = workspace.pixelPreview && zoom >= 8 ? 1 : 64;
+    ctx.save();
+    ctx.strokeStyle = workspace.pixelPreview && zoom >= 8 ? "rgba(25, 77, 111, 0.24)" : "rgba(42,111,151,0.16)";
+    ctx.lineWidth = 1 / zoom;
+    for (let x = 0; x <= docW; x += grid) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, docH);
+      ctx.stroke();
+    }
+    for (let y = 0; y <= docH; y += grid) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(docW, y);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   for (const id of editorDoc.order) {
     const layer = editorDoc.layers[id];
     if (!layer || !layer.visible) continue;
     ctx.save();
     ctx.globalAlpha = layer.opacity;
-    ctx.globalCompositeOperation = layer.blend;
+    ctx.globalCompositeOperation = layer.clipToBelow ? "source-atop" : layer.blend;
+    if (layer.effect === "shadow") {
+      ctx.shadowColor = "rgba(17, 24, 39, 0.35)";
+      ctx.shadowBlur = 18;
+      ctx.shadowOffsetX = 8;
+      ctx.shadowOffsetY = 10;
+    } else if (layer.effect === "glow") {
+      ctx.shadowColor = "rgba(42, 111, 151, 0.5)";
+      ctx.shadowBlur = 18;
+    } else if (layer.effect === "blur") {
+      ctx.filter = "blur(3px)";
+    }
     ctx.translate(layer.ox, layer.oy);
+    if (layer.maskEnabled) {
+      const mw = layer.canvas?.width || docW;
+      const mh = layer.canvas?.height || docH;
+      ctx.beginPath();
+      ctx.rect(mw * 0.05, mh * 0.05, mw * 0.9, mh * 0.9);
+      ctx.clip();
+    }
     if (layer.type === "raster") ctx.drawImage(layer.canvas, 0, 0);
     else if (layer.type === "text") drawText(ctx, layer);
     else layer.shapes.forEach(shape => drawShape(ctx, shape));
@@ -177,6 +216,34 @@ export function renderEditor({
     ctx.stroke();
   });
   ctx.restore();
+
+  if (workspace.showRulers) {
+    ctx.save();
+    ctx.fillStyle = "rgba(255,255,255,0.82)";
+    ctx.fillRect(0, 0, vw, 22);
+    ctx.fillRect(0, 0, 28, vh);
+    ctx.strokeStyle = "rgba(42,111,151,0.35)";
+    ctx.fillStyle = "#194d6f";
+    ctx.font = "10px IBM Plex Mono, monospace";
+    const step = zoom >= 1 ? 100 : 250;
+    for (let x = 0; x <= docW; x += step) {
+      const sx = pan.x + x * zoom;
+      ctx.beginPath();
+      ctx.moveTo(sx, 0);
+      ctx.lineTo(sx, 22);
+      ctx.stroke();
+      if (sx > 30 && sx < vw) ctx.fillText(String(x), sx + 3, 14);
+    }
+    for (let y = 0; y <= docH; y += step) {
+      const sy = pan.y + y * zoom;
+      ctx.beginPath();
+      ctx.moveTo(0, sy);
+      ctx.lineTo(28, sy);
+      ctx.stroke();
+      if (sy > 24 && sy < vh) ctx.fillText(String(y), 4, sy - 3);
+    }
+    ctx.restore();
+  }
 
   if (["brush", "eraser"].includes(tool) && !isPanning) {
     const radius = (brushSize * zoom) / 2;

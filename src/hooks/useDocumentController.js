@@ -315,7 +315,7 @@ export default function useDocumentController({
           return;
         }
         layer.shapes.forEach(shape => {
-          if (shape.type === "line") {
+          if (shape.type === "line" || shape.type === "path") {
             shape.x1 += dx;
             shape.y1 += dy;
             shape.x2 += dx;

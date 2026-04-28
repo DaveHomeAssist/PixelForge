@@ -2,7 +2,7 @@ import { clamp, dist } from "./utils.js";
 
 export function getShapeBounds(shape) {
   if (!shape) return null;
-  if (shape.type === "line") {
+  if (shape.type === "line" || shape.type === "path") {
     return {
       left: Math.min(shape.x1, shape.x2),
       top: Math.min(shape.y1, shape.y2),
@@ -28,7 +28,7 @@ export function getShapeCenter(shape) {
 export function getShapeHandles(shape) {
   const bounds = getShapeBounds(shape);
   if (!bounds) return [];
-  if (shape.type === "line") {
+  if (shape.type === "line" || shape.type === "path") {
     return [
       { id: "start", x: shape.x1, y: shape.y1 },
       { id: "end", x: shape.x2, y: shape.y2 },
@@ -92,6 +92,29 @@ export function applyLineHandle(shape, handle, startShape, dx, dy) {
   shape.y2 = startShape.y2 + dy;
 }
 
+function buildRegularPoints(s, count, inset = 1) {
+  const cx = s.x + s.w / 2;
+  const cy = s.y + s.h / 2;
+  const rx = Math.abs(s.w / 2);
+  const ry = Math.abs(s.h / 2);
+  const points = [];
+  const total = inset === 1 ? count : count * 2;
+  for (let i = 0; i < total; i += 1) {
+    const inner = inset !== 1 && i % 2 === 1;
+    const scale = inner ? inset : 1;
+    const angle = -Math.PI / 2 + (Math.PI * 2 * i) / total;
+    points.push({ x: cx + Math.cos(angle) * rx * scale, y: cy + Math.sin(angle) * ry * scale });
+  }
+  return points;
+}
+
+function drawPoints(ctx, points) {
+  if (!points.length) return;
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i += 1) ctx.lineTo(points[i].x, points[i].y);
+  ctx.closePath();
+}
+
 export function drawShape(ctx, s) {
   ctx.beginPath();
   if (s.type === "rect") ctx.rect(s.x, s.y, s.w, s.h);
@@ -99,7 +122,13 @@ export function drawShape(ctx, s) {
     const rx = Math.abs(s.w / 2), ry = Math.abs(s.h / 2);
     if (rx > 0 && ry > 0) ctx.ellipse(s.x + s.w / 2, s.y + s.h / 2, rx, ry, 0, 0, Math.PI * 2);
   } else if (s.type === "line") { ctx.moveTo(s.x1, s.y1); ctx.lineTo(s.x2, s.y2); }
-  if (s.fill && s.type !== "line") { ctx.fillStyle = s.fill; ctx.fill(); }
+  else if (s.type === "polygon") drawPoints(ctx, buildRegularPoints(s, s.sides || 5));
+  else if (s.type === "star") drawPoints(ctx, buildRegularPoints(s, s.points || 5, s.innerRatio || 0.45));
+  else if (s.type === "path") {
+    ctx.moveTo(s.x1, s.y1);
+    ctx.lineTo(s.x2, s.y2);
+  }
+  if (s.fill && s.type !== "line" && s.type !== "path") { ctx.fillStyle = s.fill; ctx.fill(); }
   if (s.stroke) { ctx.strokeStyle = s.stroke; ctx.lineWidth = s.strokeWidth || 2; ctx.lineCap = "round"; ctx.stroke(); }
 }
 
@@ -115,6 +144,16 @@ export function hitShape(s, px, py) {
     if (l2 === 0) return dist(px, py, s.x1, s.y1) < 6;
     const t = clamp(((px - s.x1) * dx + (py - s.y1) * dy) / l2, 0, 1);
     return dist(px, py, s.x1 + t * dx, s.y1 + t * dy) < 6;
+  }
+  if (s.type === "path") {
+    const dx = s.x2 - s.x1, dy = s.y2 - s.y1, l2 = dx * dx + dy * dy;
+    if (l2 === 0) return dist(px, py, s.x1, s.y1) < 6;
+    const t = clamp(((px - s.x1) * dx + (py - s.y1) * dy) / l2, 0, 1);
+    return dist(px, py, s.x1 + t * dx, s.y1 + t * dy) < 6;
+  }
+  if (s.type === "polygon" || s.type === "star") {
+    const b = getShapeBounds(s);
+    return px >= b.left && px <= b.right && py >= b.top && py <= b.bottom;
   }
   return false;
 }

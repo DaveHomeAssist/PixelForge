@@ -131,6 +131,9 @@ export default function LayersSection({
                 <span className="pf-layer-type">{layer.type === "raster" ? "PX" : "VEC"}</span>
                 {suggestedLayerId === layer.id && <span className="pf-layer-tag">Likely</span>}
                 {layer.blend !== "source-over" && <span className="pf-layer-tag">{layer.blend}</span>}
+                {layer.effect && <span className="pf-layer-tag">{layer.effect}</span>}
+                {layer.maskEnabled && <span className="pf-layer-tag">mask</span>}
+                {layer.clipToBelow && <span className="pf-layer-tag">clip</span>}
                 {Math.round(layer.opacity * 100) !== 100 && <span className="pf-layer-tag">{Math.round(layer.opacity * 100)}%</span>}
               </div>
             </div>

@@ -3,7 +3,7 @@ import { uid, cloneShape, makeCanvas, reorderList } from "../utils.js";
 import { DEFAULT_TEXT_LAYER } from "../text.js";
 
 function duplicateShapeOffset(shape) {
-  if (shape.type === "line") {
+  if (shape.type === "line" || shape.type === "path") {
     return { ...cloneShape(shape), id: uid(), x1: shape.x1 + 12, y1: shape.y1 + 12, x2: shape.x2 + 12, y2: shape.y2 + 12 };
   }
   return { ...cloneShape(shape), id: uid(), x: shape.x + 12, y: shape.y + 12 };
@@ -163,6 +163,9 @@ export default function useLayerOps({
         locked: false,
         ox: layer.ox + 12,
         oy: layer.oy + 12,
+        effect: layer.effect || null,
+        maskEnabled: !!layer.maskEnabled,
+        clipToBelow: !!layer.clipToBelow,
       };
       let duplicate;
       if (layer.type === "raster") {
