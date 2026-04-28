@@ -40,6 +40,7 @@ function makeArgs(overrides = {}) {
     syncEditor: vi.fn(),
     setSelectedShape: vi.fn(),
     setColor1: vi.fn(),
+    setIsPanning: vi.fn(),
     setPan: vi.fn(),
     setZoom: vi.fn(),
     bump: vi.fn(),
@@ -66,5 +67,29 @@ describe("useCanvasInteractions", () => {
     expect(args.setColor1).toHaveBeenCalledWith("#0a141e");
     expect(args.triggerFeedback).toHaveBeenCalledWith("color-primary", "success", 140);
     expect(args.flash).toHaveBeenCalledWith("Picked #0a141e", "success", 1200);
+  });
+
+  it("reports panning state while space-drag panning", () => {
+    const args = makeArgs({ spaceRef: { current: true } });
+    const { result } = renderHook(() => useCanvasInteractions(args));
+
+    act(() => {
+      result.current.onDown({
+        preventDefault: vi.fn(),
+        button: 0,
+        clientX: 20,
+        clientY: 30,
+      });
+    });
+
+    expect(args.panningRef.current).toBe(true);
+    expect(args.setIsPanning).toHaveBeenCalledWith(true);
+
+    act(() => {
+      result.current.onUp();
+    });
+
+    expect(args.panningRef.current).toBe(false);
+    expect(args.setIsPanning).toHaveBeenCalledWith(false);
   });
 });

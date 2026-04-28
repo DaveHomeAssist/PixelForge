@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import {
   clamp, cloneShape, dist, ensureShape, extractRegion, rgbHex,
 } from "../utils.js";
@@ -39,6 +39,7 @@ export default function useCanvasInteractions({
   syncEditor,
   setSelectedShape,
   setColor1,
+  setIsPanning = () => {},
   setPan,
   setZoom,
   bump,
@@ -48,6 +49,8 @@ export default function useCanvasInteractions({
   selectionMask,
   setSelectionMask,
 }) {
+  const touchStateRef = useRef(null);
+
   const screenToDoc = useCallback((screenX, screenY) => {
     const rect = cvRef.current?.getBoundingClientRect();
     return rect
@@ -121,6 +124,7 @@ export default function useCanvasInteractions({
 
     if (event.button === 1 || (event.button === 0 && spaceRef.current)) {
       panningRef.current = true;
+      setIsPanning(true);
       panStateRef.current = { x: event.clientX, y: event.clientY, ox: pan.x, oy: pan.y };
       return;
     }
@@ -307,6 +311,7 @@ export default function useCanvasInteractions({
     screenToDoc,
     selectionMask,
     setColor1,
+    setIsPanning,
     setSelectedShape,
     setSelectionMask,
     spaceRef,
@@ -459,6 +464,7 @@ export default function useCanvasInteractions({
   const onUp = useCallback(() => {
     if (panningRef.current) {
       panningRef.current = false;
+      setIsPanning(false);
       return;
     }
     const tracker = tsRef.current;
@@ -521,6 +527,7 @@ export default function useCanvasInteractions({
     panningRef,
     selectedShape,
     selectionMask,
+    setIsPanning,
     setSelectedShape,
     setSelectionMask,
     tool,
@@ -552,6 +559,97 @@ export default function useCanvasInteractions({
     viewport.addEventListener("wheel", handler, { passive: false });
     return () => viewport.removeEventListener("wheel", handler);
   }, [cvRef, setPan, setZoom, vpRef]);
+
+  useEffect(() => {
+    const viewport = vpRef.current;
+    if (!viewport) return undefined;
+
+    const midpoint = (touches) => ({
+      x: (touches[0].clientX + touches[1].clientX) / 2,
+      y: (touches[0].clientY + touches[1].clientY) / 2,
+    });
+    const touchDistance = (touches) => dist(touches[0].clientX, touches[0].clientY, touches[1].clientX, touches[1].clientY);
+
+    const start = (event) => {
+      if (event.touches.length === 1) {
+        event.preventDefault();
+        const touch = event.touches[0];
+        touchStateRef.current = {
+          mode: "pan",
+          x: touch.clientX,
+          y: touch.clientY,
+          pan,
+        };
+        panningRef.current = true;
+        setIsPanning(true);
+        return;
+      }
+      if (event.touches.length === 2) {
+        event.preventDefault();
+        const center = midpoint(event.touches);
+        touchStateRef.current = {
+          mode: "pinch",
+          distance: touchDistance(event.touches),
+          center,
+          zoom,
+          pan,
+        };
+        panningRef.current = true;
+        setIsPanning(true);
+      }
+    };
+
+    const move = (event) => {
+      const state = touchStateRef.current;
+      if (!state) return;
+      event.preventDefault();
+
+      if (state.mode === "pan" && event.touches.length === 1) {
+        const touch = event.touches[0];
+        setPan({
+          x: state.pan.x + touch.clientX - state.x,
+          y: state.pan.y + touch.clientY - state.y,
+        });
+        return;
+      }
+
+      if (state.mode === "pinch" && event.touches.length === 2) {
+        const rect = cvRef.current?.getBoundingClientRect();
+        if (!rect) return;
+        const center = midpoint(event.touches);
+        const previousZoom = state.zoom;
+        const nextZoom = clamp(previousZoom * (touchDistance(event.touches) / Math.max(1, state.distance)), 0.02, 64);
+        const ratio = nextZoom / previousZoom;
+        const mouseX = center.x - rect.left;
+        const mouseY = center.y - rect.top;
+        setZoom(nextZoom);
+        setPan({
+          x: mouseX - ratio * (mouseX - state.pan.x) + center.x - state.center.x,
+          y: mouseY - ratio * (mouseY - state.pan.y) + center.y - state.center.y,
+        });
+      }
+    };
+
+    const end = (event) => {
+      if (event.touches.length > 0) return;
+      touchStateRef.current = null;
+      if (panningRef.current) {
+        panningRef.current = false;
+        setIsPanning(false);
+      }
+    };
+
+    viewport.addEventListener("touchstart", start, { passive: false });
+    viewport.addEventListener("touchmove", move, { passive: false });
+    viewport.addEventListener("touchend", end, { passive: false });
+    viewport.addEventListener("touchcancel", end, { passive: false });
+    return () => {
+      viewport.removeEventListener("touchstart", start);
+      viewport.removeEventListener("touchmove", move);
+      viewport.removeEventListener("touchend", end);
+      viewport.removeEventListener("touchcancel", end);
+    };
+  }, [cvRef, pan, panningRef, setIsPanning, setPan, setZoom, vpRef, zoom]);
 
   return {
     getHandleAtPoint,

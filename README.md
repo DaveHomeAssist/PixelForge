@@ -43,7 +43,17 @@ Full local CI check (lint + test + build):
 npm run ci
 ```
 
-Deployment to GitHub Pages is handled by `.github/workflows/deploy-pages.yml` on every push to `main`.
+Deployment to GitHub Pages is handled by `.github/workflows/deploy-pages.yml` after CI succeeds on `main`, with a manual dispatch fallback.
+
+## Security notes
+
+AI provider keys are stored in browser `localStorage` on this device. They are not written into `.pforge` project files or autosave drafts, but any JavaScript running on the PixelForge origin can read them. Use keys with narrow permissions and rotate them if the browser profile or deployed origin is compromised.
+
+Google Fonts are loaded from Google-hosted CSS. Subresource integrity is not applied because Google rotates that stylesheet; self-host fonts if this moves into a stricter production environment.
+
+## Repository hygiene
+
+Avoid keeping the working tree in an iCloud-synced Desktop folder. iCloud can create duplicate `* 2.*` files in build outputs or dependency folders, which makes diffs and CI failures harder to reason about. A local path such as `~/Code/pixel-forge` is safer for day-to-day development.
 
 ## History
 
