@@ -54,6 +54,15 @@
 .pf.pf-dark .pf-mobile-menu-sheet {
   background: linear-gradient(180deg, rgba(31,38,45,0.96), rgba(24,30,36,0.98));
 }
+.pf.pf-dark .pf-menu-popover {
+  border-color: rgba(70, 84, 95, 0.95);
+  background: rgba(28, 34, 40, 0.98);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+}
+.pf.pf-dark .pf-menu-item kbd {
+  border-color: rgba(70, 84, 95, 0.9);
+  background: rgba(18, 23, 28, 0.8);
+}
 .pf * { box-sizing: border-box; margin: 0; padding: 0; }
 .pf button, .pf input, .pf select { font: inherit; }
 .pf button,
@@ -155,6 +164,92 @@
   opacity: 0.42;
   pointer-events: none;
   box-shadow: none;
+}
+.pf-compact-icon {
+  width: 34px;
+  justify-content: center;
+  padding: 0;
+}
+.pf-menu-dropdown {
+  position: relative;
+  display: inline-flex;
+}
+.pf-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--pf-text);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background var(--pf-dur-hover) var(--pf-ease-standard), border-color var(--pf-dur-hover) var(--pf-ease-standard), color var(--pf-dur-hover) var(--pf-ease-standard);
+}
+.pf-menu-trigger:hover,
+.pf-menu-trigger.active {
+  color: var(--pf-accent-strong);
+  border-color: rgba(42, 111, 151, 0.14);
+  background: rgba(42, 111, 151, 0.08);
+}
+.pf-menu-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 10020;
+  min-width: 210px;
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid rgba(204, 189, 169, 0.92);
+  background: rgba(255, 252, 247, 0.98);
+  box-shadow: 0 18px 50px rgba(73, 56, 28, 0.16);
+}
+.pf-menu-item {
+  width: 100%;
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--pf-text);
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+}
+.pf-menu-item:hover {
+  background: rgba(42, 111, 151, 0.1);
+  color: var(--pf-accent-strong);
+}
+.pf-menu-item:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+.pf-menu-item:disabled:hover {
+  background: transparent;
+  color: var(--pf-text);
+}
+.pf-menu-item kbd {
+  border: 1px solid rgba(204, 189, 169, 0.72);
+  border-radius: 6px;
+  padding: 2px 5px;
+  color: var(--pf-muted);
+  background: rgba(255,255,255,0.58);
+  font-family: "IBM Plex Mono", "SFMono-Regular", "Menlo", monospace;
+  font-size: 10px;
+  letter-spacing: 0;
+}
+.pf-menu-rule {
+  height: 1px;
+  margin: 5px 4px;
+  background: var(--pf-line);
 }
 .pf-zoom {
   min-width: 64px;
@@ -1447,6 +1542,7 @@
   }
   .pf-menu-group .pf-menu-brand,
   .pf-menu-group .pf-menu-sep,
+  .pf-menu-group .pf-menu-dropdown,
   .pf-menu-group .pf-mobile-sheet-only {
     display: none;
   }
