@@ -9,7 +9,7 @@ const repoRoot = path.resolve(__dirname, "..");
 const port = 4173;
 const url = `http://127.0.0.1:${port}/PixelForge/`;
 const screenshotDir = path.join(repoRoot, "artifacts", "smoke-visual");
-const session = "pixelforge-visual-smoke";
+const session = `pfvisual-${process.pid}`;
 const marker = "PIXELFORGE_VISUAL_RESULT ";
 
 function run(command, args, options = {}) {
@@ -45,6 +45,42 @@ function run(command, args, options = {}) {
   });
 }
 
+function shellQuote(value) {
+  return `'${String(value).replaceAll("'", "'\\''")}'`;
+}
+
+function runShell(command, options = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn("/bin/zsh", ["-lc", command], {
+      cwd: repoRoot,
+      stdio: options.capture ? ["ignore", "pipe", "pipe"] : "inherit",
+      env: { ...process.env, ...(options.env || {}) },
+    });
+
+    let stdout = "";
+    let stderr = "";
+
+    if (options.capture) {
+      child.stdout.on("data", chunk => {
+        const text = chunk.toString();
+        stdout += text;
+        process.stdout.write(text);
+      });
+      child.stderr.on("data", chunk => {
+        const text = chunk.toString();
+        stderr += text;
+        process.stderr.write(text);
+      });
+    }
+
+    child.on("error", reject);
+    child.on("exit", code => {
+      if (code === 0) resolve({ stdout, stderr });
+      else reject(new Error(`shell command failed with exit code ${code}: ${command}`));
+    });
+  });
+}
+
 function startPreviewServer() {
   return spawn("npm", ["run", "preview", "--", "--host", "127.0.0.1", "--port", String(port)], {
     cwd: repoRoot,
@@ -69,7 +105,7 @@ async function waitForServer(maxAttempts = 100) {
 
 function parseVisualResult(stdout) {
   const line = stdout.split(/\r?\n/).map(item => item.trim()).find(item => item.startsWith(marker));
-  if (!line) throw new Error("Visual result marker not found in output");
+  if (!line) return JSON.parse(stdout);
   return JSON.parse(line.slice(marker.length));
 }
 
@@ -87,12 +123,15 @@ async function main() {
 
     const codePath = path.join(__dirname, "pixelforge-visual-smoke.run-code.js");
     console.log("[visual-smoke] Opening Playwright session...");
-    await run("npx", ["--yes", "--package", "@playwright/cli", "playwright-cli", "-s", session, "open", url]);
+    await runShell(
+      `export PATH=/opt/homebrew/Cellar/node@22/22.22.1_1/bin:$PATH; npx --yes --package @playwright/cli playwright-cli -s ${shellQuote(session)} open ${shellQuote(url)} >/tmp/pixelforge-visual-open.txt`,
+    );
+    await new Promise(resolve => setTimeout(resolve, 2000));
 
     console.log("[visual-smoke] Executing visual run-code script...");
     const execution = await run(
       "npx",
-      ["--yes", "--package", "@playwright/cli", "playwright-cli", "-s", session, "run-code", "--filename", codePath],
+      ["--yes", "--package", "@playwright/cli", "playwright-cli", "-s", session, "run-code", "--filename", codePath, "--raw"],
       {
         capture: true,
         env: {

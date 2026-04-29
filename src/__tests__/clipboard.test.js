@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { imageDataToFile, readSelectionImageData } from "../clipboard.js";
+import { clearSelectionPixels, imageDataToFile, makePolygonSelection, readSelectionImageData } from "../clipboard.js";
 import { makeCanvas } from "../utils.js";
 
 function makeLayer() {
@@ -42,6 +42,29 @@ describe("selection clipboard helpers", () => {
       rect: { x: 0, y: 0, w: 1, h: 1 },
       floating: null,
     })).toBeNull();
+  });
+
+  it("applies selection masks when reading and clearing pixels", () => {
+    const layer = makeLayer();
+    const mask = { w: 2, h: 1, data: new Uint8Array([1, 0]) };
+    const selection = { layerId: layer.id, rect: { x: 0, y: 0, w: 2, h: 1 }, mask, floating: null };
+    const imageData = readSelectionImageData(layer, selection);
+
+    expect(imageData.data[3]).toBe(255);
+    expect(imageData.data[7]).toBe(0);
+
+    clearSelectionPixels(layer, selection);
+    const cleared = layer.canvas.getContext("2d").getImageData(0, 0, 2, 1).data;
+    expect(cleared[3]).toBe(0);
+    expect(cleared[7]).toBe(255);
+  });
+
+  it("creates polygon masks for lasso selections", () => {
+    const selection = makePolygonSelection([[0, 0], [4, 0], [0, 4]]);
+
+    expect(selection.rect).toEqual({ x: 0, y: 0, w: 4, h: 4 });
+    expect(selection.mask.data.some(Boolean)).toBe(true);
+    expect(selection.mask.data.some(value => !value)).toBe(true);
   });
 
   it("converts selection data to a PNG file for internal paste", async () => {

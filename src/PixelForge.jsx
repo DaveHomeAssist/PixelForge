@@ -41,7 +41,7 @@ import { commitFloat } from "./marquee.js";
 import { cropToRect, trimTransparent, rotateCanvas, flipCanvas } from "./canvasOps.js";
 import { hitShape } from "./shapes.js";
 import { applyImageEffect, blurImageData, sharpenImageData } from "./imageEffects.js";
-import { imageDataToFile, readSelectionImageData } from "./clipboard.js";
+import { clearSelectionPixels, cloneImageData, imageDataToFile, readSelectionImageData } from "./clipboard.js";
 
 /* Inlined constants, utilities, shapes, serialization, autosave, and CSS
    have been extracted to their own modules — see imports above. */
@@ -99,6 +99,7 @@ export default function PixelForge() {
   const [exportOpen, setExportOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [clipboardStatus, setClipboardStatus] = useState(null);
 
   /* ─── Refs ─── */
   const cvRef = useRef(null);
@@ -657,38 +658,6 @@ export default function PixelForge() {
   }, [isDirty]);
 
   useEffect(() => {
-    const onPaste = (e) => {
-      if (isEditableTarget(e.target)) return;
-      // Marquee: internal clipboard takes priority if a selection exists
-      if (clipboardRef.current && !e.clipboardData?.files?.length) {
-        e.preventDefault();
-        imageDataToFile(clipboardRef.current.imageData).then((file) => {
-          if (file) handleClipboardPaste(file);
-        });
-        return;
-      }
-      const items = Array.from(e.clipboardData?.items || []);
-      const imageItem = items.find(item => item.kind === "file" && item.type.startsWith("image/"));
-      if (imageItem) {
-        const file = imageItem.getAsFile();
-        if (file) {
-          e.preventDefault();
-          handleClipboardPaste(file);
-          return;
-        }
-      }
-      const files = Array.from(e.clipboardData?.files || []);
-      const imageFile = files.find(f => f.type.startsWith("image/"));
-      if (imageFile) {
-        e.preventDefault();
-        handleClipboardPaste(imageFile);
-      }
-    };
-    document.addEventListener("paste", onPaste);
-    return () => document.removeEventListener("paste", onPaste);
-  }, [handleClipboardPaste]);
-
-  useEffect(() => {
     const media = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`);
     const sync = () => setIsCompactUI(media.matches);
     sync();
@@ -766,11 +735,11 @@ export default function PixelForge() {
     return () => window.clearTimeout(id);
   }, [selectionMask, bump]);
 
-  // Commit any floating marquee pixels when switching away from the marquee tool
+  // Commit any floating selection pixels when switching away from selection tools
   const prevToolRef = useRef(tool);
   useEffect(() => {
-    const wasMarquee = prevToolRef.current === "marquee";
-    const isMarquee = tool === "marquee";
+    const wasMarquee = prevToolRef.current === "marquee" || prevToolRef.current === "lasso";
+    const isMarquee = tool === "marquee" || tool === "lasso";
     if (wasMarquee && !isMarquee && selectionMask?.floating) {
       const layer = doc.current.layers[selectionMask.layerId];
       if (layer) {
@@ -888,6 +857,7 @@ export default function PixelForge() {
       return false;
     }
     clipboardRef.current = { imageData };
+    setClipboardStatus(`${imageData.width}×${imageData.height} copied`);
     syncSystemClipboardImage(imageData);
     flash("Copied selection", "success", 1200);
     return true;
@@ -906,15 +876,13 @@ export default function PixelForge() {
       return;
     }
     clipboardRef.current = { imageData };
+    setClipboardStatus(`${imageData.width}×${imageData.height} cut`);
     syncSystemClipboardImage(imageData);
     const before = capturePatchSnapshot([layer.id], true);
     if (selectionMask.floating) {
       // float exists — discard (don't commit); but any prior lift already cleared pixels
     } else {
-      layer.canvas.getContext("2d").clearRect(
-        selectionMask.rect.x, selectionMask.rect.y,
-        selectionMask.rect.w, selectionMask.rect.h,
-      );
+      clearSelectionPixels(layer, selectionMask);
     }
     commitPatchHistory(before, [layer.id], { selectedShape });
     setSelectionMask(null);
@@ -922,16 +890,64 @@ export default function PixelForge() {
   }, [capturePatchSnapshot, commitPatchHistory, flash, readMarqueeImageData, selectedShape, selectionMask, syncSystemClipboardImage]);
 
   const pasteInternalClipboard = useCallback(async () => {
-    if (!clipboardRef.current?.imageData) return false;
-    const file = await imageDataToFile(clipboardRef.current.imageData);
+    const imageData = clipboardRef.current?.imageData;
+    if (!imageData) return false;
+    const layer = doc.current.layers[activeId];
+    if (layer?.type === "raster" && !layer.locked) {
+      const rect = {
+        x: Math.max(0, Math.round((layer.canvas.width - imageData.width) / 2)),
+        y: Math.max(0, Math.round((layer.canvas.height - imageData.height) / 2)),
+        w: imageData.width,
+        h: imageData.height,
+      };
+      setSelectionMask({ layerId: layer.id, rect, floating: { imageData: cloneImageData(imageData), ox: 0, oy: 0 } });
+      setSelectedShape(null);
+      setTool("marquee");
+      setActiveId(layer.id);
+      setClipboardStatus(`${imageData.width}×${imageData.height} pasted`);
+      flash("Pasted selection into active layer", "success", 1400);
+      return true;
+    }
+    const file = await imageDataToFile(imageData);
     if (!file) return false;
-    return handleClipboardPaste(file);
-  }, [handleClipboardPaste]);
+    const pasted = await handleClipboardPaste(file);
+    if (pasted) setClipboardStatus(`${imageData.width}×${imageData.height} pasted as layer`);
+    return pasted;
+  }, [activeId, flash, handleClipboardPaste, setTool]);
 
   const pasteClipboard = useCallback(async () => {
     if (await pasteInternalClipboard()) return true;
     return handleClipboardRead();
   }, [handleClipboardRead, pasteInternalClipboard]);
+
+  useEffect(() => {
+    const onPaste = (e) => {
+      if (isEditableTarget(e.target)) return;
+      if (clipboardRef.current) {
+        e.preventDefault();
+        pasteClipboard();
+        return;
+      }
+      const items = Array.from(e.clipboardData?.items || []);
+      const imageItem = items.find(item => item.kind === "file" && item.type.startsWith("image/"));
+      if (imageItem) {
+        const file = imageItem.getAsFile();
+        if (file) {
+          e.preventDefault();
+          handleClipboardPaste(file);
+          return;
+        }
+      }
+      const files = Array.from(e.clipboardData?.files || []);
+      const imageFile = files.find(f => f.type.startsWith("image/"));
+      if (imageFile) {
+        e.preventDefault();
+        handleClipboardPaste(imageFile);
+      }
+    };
+    document.addEventListener("paste", onPaste);
+    return () => document.removeEventListener("paste", onPaste);
+  }, [handleClipboardPaste, pasteClipboard]);
 
   const deleteMarquee = useCallback(() => {
     if (!selectionMask) return;
@@ -939,10 +955,7 @@ export default function PixelForge() {
     if (!layer) return;
     const before = capturePatchSnapshot([layer.id], true);
     if (!selectionMask.floating) {
-      layer.canvas.getContext("2d").clearRect(
-        selectionMask.rect.x, selectionMask.rect.y,
-        selectionMask.rect.w, selectionMask.rect.h,
-      );
+      clearSelectionPixels(layer, selectionMask);
     }
     commitPatchHistory(before, [layer.id], { selectedShape });
     setSelectionMask(null);
@@ -955,16 +968,10 @@ export default function PixelForge() {
     let floating = selectionMask.floating;
     if (!floating) {
       floating = {
-        imageData: layer.canvas.getContext("2d").getImageData(
-          selectionMask.rect.x, selectionMask.rect.y,
-          selectionMask.rect.w, selectionMask.rect.h,
-        ),
+        imageData: readSelectionImageData(layer, selectionMask),
         ox: 0, oy: 0,
       };
-      layer.canvas.getContext("2d").clearRect(
-        selectionMask.rect.x, selectionMask.rect.y,
-        selectionMask.rect.w, selectionMask.rect.h,
-      );
+      clearSelectionPixels(layer, selectionMask);
     }
     setSelectionMask({
       ...selectionMask,
@@ -1799,6 +1806,7 @@ export default function PixelForge() {
         toolMeta={toolMeta}
         isDirty={isDirty}
         lastSavedAt={lastSavedAt}
+        clipboardStatus={clipboardStatus}
       />
 
       {/* ── Toast ── */}

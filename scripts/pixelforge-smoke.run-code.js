@@ -41,11 +41,12 @@ async (page) => {
     else fail(step, detail);
   };
 
-  const importImagePath = "C:/Users/Dave RambleOn/Desktop/01-Projects/pixel-forge-work/scripts/fixtures/smoke-import.svg";
+  const importImagePath = "scripts/fixtures/smoke-import.svg";
 
   page.on("console", (msg) => {
     if (msg.type() === "error") result.consoleErrors.push(msg.text());
   });
+  page.on("dialog", dialog => dialog.accept().catch(() => {}));
 
   const canvas = page.locator("canvas").first();
 
@@ -103,7 +104,8 @@ async (page) => {
     const title = await page.title();
     expect(title === "PixelForge", "App shell loads", { title, url: page.url() });
 
-    await page.getByRole("button", { name: "New" }).click();
+    await page.getByRole("button", { name: "File", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New Document" }).click();
     await page.getByLabel("Document width").fill("640");
     await page.getByLabel("Document height").fill("480");
     await page.getByLabel("Document background color").fill("#ffffff");
@@ -157,7 +159,8 @@ async (page) => {
       afterImportLayers,
     });
 
-    await page.getByRole("button", { name: "Resize" }).click();
+    await page.getByRole("button", { name: "Image", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Resize Canvas" }).click();
     await page.getByLabel("Resize width").fill("700");
     await page.getByLabel("Resize height").fill("500");
     await page.getByRole("button", { name: "Apply" }).click();
@@ -166,7 +169,8 @@ async (page) => {
     expect(resized?.width === 700 && resized?.height === 500, "Resize updates size", { resized });
 
     const exportDownloadPromise = page.waitForEvent("download", { timeout: 9000 }).catch(() => null);
-    await page.getByRole("button", { name: /Export PNG/ }).click();
+    await page.getByRole("button", { name: "Export", exact: true }).click();
+    await page.getByRole("dialog", { name: "Export options" }).getByRole("button", { name: "Export", exact: true }).click();
     const exportDownload = await exportDownloadPromise;
     if (!exportDownload) {
       fail("Export PNG triggers download", {});
@@ -189,7 +193,8 @@ async (page) => {
     }
 
     const layersBeforeAi = await layerCount();
-    await page.getByRole("button", { name: "Generate with AI" }).click();
+    await page.getByRole("button", { name: "File", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Generate Image", exact: true }).click();
     await page.getByRole("button", { name: "Generate", exact: true }).click();
     await page.waitForTimeout(260);
     const aiSettingsVisible = await page.getByRole("dialog", { name: /AI settings/i }).isVisible().catch(() => false);
@@ -202,6 +207,39 @@ async (page) => {
     expect(layersAfterAi === layersBeforeAi, "AI modal lifecycle preserves editor state", {
       layersBeforeAi,
       layersAfterAi,
+    });
+
+    await page.locator(".pf-layer-actions").getByRole("button", { name: /Raster/ }).click();
+    await page.waitForTimeout(120);
+    await imageInput.setInputFiles(importImagePath);
+    await page.waitForTimeout(320);
+    const importedLayerCount = await layerCount();
+    const mergeButton = page.getByRole("button", { name: "Merge Down" }).first();
+    if (await mergeButton.isEnabled()) await mergeButton.click();
+    await page.waitForTimeout(180);
+    expect(await layerCount() === importedLayerCount - 1, "Merge Down reduces imported raster layer count", {
+      before: importedLayerCount,
+      after: await layerCount(),
+    });
+    await page.getByTitle("Marquee Select (M)").click();
+    const cbox = await canvas.boundingBox();
+    if (!cbox) throw new Error("Canvas bounding box not available for selection clipboard smoke");
+    await page.mouse.move(cbox.x + cbox.width * 0.45, cbox.y + cbox.height * 0.45);
+    await page.mouse.down();
+    await page.mouse.move(cbox.x + cbox.width * 0.58, cbox.y + cbox.height * 0.58, { steps: 8 });
+    await page.mouse.up();
+    await page.keyboard.press("Meta+X");
+    await page.waitForTimeout(220);
+    const cutStatus = await page.locator(".pf-status").textContent();
+    expect(/Clipboard .*cut/i.test(cutStatus || ""), "Cmd X records current selection in PixelForge clipboard", { cutStatus });
+    const layersBeforePaste = await layerCount();
+    await page.keyboard.press("Meta+V");
+    await page.waitForTimeout(260);
+    const pasteStatus = await page.locator(".pf-status").textContent();
+    expect(/Clipboard .*pasted/i.test(pasteStatus || ""), "Cmd V pastes current selection clipboard", { pasteStatus });
+    expect(await layerCount() === layersBeforePaste, "Selection paste stays in active raster layer instead of stale image layer", {
+      before: layersBeforePaste,
+      after: await layerCount(),
     });
 
     const afterAiBeforeStroke = hashBuffer(await snapshotCanvas());

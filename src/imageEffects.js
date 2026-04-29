@@ -97,6 +97,10 @@ export function sharpenImageData(imageData) {
 }
 
 export function findConnectedBounds(imageData, startX, startY, tolerance = 16) {
+  return findConnectedSelection(imageData, startX, startY, tolerance)?.rect || null;
+}
+
+export function findConnectedSelection(imageData, startX, startY, tolerance = 16) {
   const { width, height, data } = imageData;
   const x0 = Math.floor(startX);
   const y0 = Math.floor(startY);
@@ -126,5 +130,12 @@ export function findConnectedBounds(imageData, startX, startY, tolerance = 16) {
     bottom = Math.max(bottom, y);
     stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
   }
-  return { x: left, y: top, w: right - left + 1, h: bottom - top + 1 };
+  const rect = { x: left, y: top, w: right - left + 1, h: bottom - top + 1 };
+  const mask = { w: rect.w, h: rect.h, data: new Uint8Array(rect.w * rect.h) };
+  for (let y = top; y <= bottom; y += 1) {
+    for (let x = left; x <= right; x += 1) {
+      if (seen[y * width + x]) mask.data[(y - top) * rect.w + (x - left)] = 1;
+    }
+  }
+  return { rect, mask };
 }

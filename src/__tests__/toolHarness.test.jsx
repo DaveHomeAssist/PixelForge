@@ -173,6 +173,7 @@ const TOOL_HARNESS = {
     expect(args.setSelectionMask).toHaveBeenCalledWith({
       layerId: layer.id,
       rect: { x: 8, y: 9, w: 27, h: 32 },
+      mask: null,
       floating: null,
     });
   },
@@ -186,11 +187,12 @@ const TOOL_HARNESS = {
     act(() => result.current.onMove(pointer(24, 44)));
     act(() => result.current.onUp());
 
-    expect(args.setSelectionMask).toHaveBeenCalledWith({
+    expect(args.setSelectionMask).toHaveBeenCalledWith(expect.objectContaining({
       layerId: layer.id,
       rect: { x: 12, y: 14, w: 21, h: 30 },
+      mask: expect.objectContaining({ w: 21, h: 30, data: expect.any(Uint8Array) }),
       floating: null,
-    });
+    }));
   },
 
   magic() {
@@ -199,11 +201,12 @@ const TOOL_HARNESS = {
 
     act(() => result.current.onDown(pointer(4, 5)));
 
-    expect(args.setSelectionMask).toHaveBeenCalledWith({
+    expect(args.setSelectionMask).toHaveBeenCalledWith(expect.objectContaining({
       layerId: layer.id,
       rect: { x: 0, y: 0, w: 64, h: 64 },
+      mask: expect.objectContaining({ w: 64, h: 64, data: expect.any(Uint8Array) }),
       floating: null,
-    });
+    }));
     expect(args.triggerFeedback).toHaveBeenCalledWith("tool-magic", "success", 140);
   },
 

@@ -1,6 +1,6 @@
 async (page) => {
-  const baseUrl = process.env.PIXELFORGE_SMOKE_URL || page.url() || "http://127.0.0.1:4173/PixelForge/";
-  const screenshotRoot = process.env.PIXELFORGE_VISUAL_SCREENSHOT_DIR || "artifacts/smoke-visual";
+  const baseUrl = page.url() || "http://127.0.0.1:4173/PixelForge/";
+  const screenshotRoot = "artifacts/smoke-visual";
 
   const viewports = [
     { key: "desktop", width: 1440, height: 900 },
@@ -68,16 +68,20 @@ async (page) => {
 
       const toolbarButtons = page.locator(".pf-toolbar .pf-tbtn");
       const toolbarCount = await toolbarButtons.count();
-      const exportButton = page.getByRole("button", { name: /Export PNG/i });
-      await exportButton.scrollIntoViewIfNeeded();
-      const toolbarReachable = toolbarCount >= 6 && await exportButton.isVisible();
+      const fileButton = page.getByRole("button", { name: "File", exact: true });
+      const mobileMenuButton = page.getByRole("button", { name: "Open menu", exact: true });
+      const fileVisible = await fileButton.isVisible().catch(() => false);
+      const mobileMenuVisible = await mobileMenuButton.isVisible().catch(() => false);
+      if (fileVisible) await fileButton.scrollIntoViewIfNeeded();
+      if (!fileVisible && mobileMenuVisible) await mobileMenuButton.scrollIntoViewIfNeeded();
+      const toolbarReachable = toolbarCount >= 6 && (fileVisible || mobileMenuVisible);
       expect(toolbarReachable, {
         viewport: viewportLabel,
         check: "Primary toolbar controls are reachable",
-        selector: ".pf-toolbar .pf-tbtn, button:has-text('Export PNG')",
+        selector: ".pf-toolbar .pf-tbtn, button:has-text('File'), button[aria-label='Open menu']",
         screenshotPath,
-        message: `Expected >=6 tool buttons and visible Export PNG control, got count=${toolbarCount}`,
-        recommendedFix: "Adjust toolbar wrapping/overflow so core actions remain reachable.",
+        message: `Expected >=6 tool buttons and visible menu control, got count=${toolbarCount}`,
+        recommendedFix: "Adjust toolbar/menu wrapping so core actions remain reachable.",
       });
 
       const overflow = await hasHorizontalOverflow();

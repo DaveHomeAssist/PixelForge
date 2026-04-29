@@ -6,9 +6,10 @@ import {
   applyLineHandle, applyRectResize, getShapeHandles, hitShape,
 } from "../shapes.js";
 import { stampBrush, drawBrushSegment, getEffectiveRadius } from "../brushes.js";
-import { normalizeRect, clipRectToLayer, pointInRect, liftSelection, commitFloat } from "../marquee.js";
+import { normalizeRect, clipRectToLayer, pointInRect, commitFloat } from "../marquee.js";
 import { floodFill } from "../floodFill.js";
-import { findConnectedBounds } from "../imageEffects.js";
+import { findConnectedSelection } from "../imageEffects.js";
+import { clearSelectionPixels, makePolygonSelection, readSelectionImageData } from "../clipboard.js";
 
 function hexToRgba(hex) {
   const raw = hex.replace("#", "");
@@ -234,9 +235,9 @@ export default function useCanvasInteractions({
       const localY = Math.floor(point.y - layer.oy);
       if (localX < 0 || localY < 0 || localX >= layer.canvas.width || localY >= layer.canvas.height) return;
       const imageData = layer.canvas.getContext("2d").getImageData(0, 0, layer.canvas.width, layer.canvas.height);
-      const rect = findConnectedBounds(imageData, localX, localY, bucketTolerance);
-      if (rect && rect.w > 0 && rect.h > 0) {
-        setSelectionMask({ layerId: layer.id, rect, floating: null });
+      const selection = findConnectedSelection(imageData, localX, localY, bucketTolerance);
+      if (selection?.rect?.w > 0 && selection.rect.h > 0) {
+        setSelectionMask({ layerId: layer.id, rect: selection.rect, mask: selection.mask, floating: null });
         setSelectedShape(null);
         triggerFeedback("tool-magic", "success", 140);
       }
@@ -507,7 +508,8 @@ export default function useCanvasInteractions({
         let floating = tracker.drag.startFloat;
         if (!floating) {
           // First move — lift the pixels
-          floating = liftSelection(layer, mask.rect);
+          floating = { imageData: readSelectionImageData(layer, mask), ox: 0, oy: 0 };
+          clearSelectionPixels(layer, mask);
         }
         const nextFloating = { imageData: floating.imageData, ox: Math.round(dx), oy: Math.round(dy) };
         setSelectionMask({ ...mask, floating: nextFloating });
@@ -583,15 +585,16 @@ export default function useCanvasInteractions({
             w: selectionMask.rect.w,
             h: selectionMask.rect.h,
           };
-          setSelectionMask({ layerId: layer.id, rect: newRect, floating: null });
+          setSelectionMask({ layerId: layer.id, rect: newRect, mask: selectionMask.mask || null, floating: null });
           commitPatchHistory(tracker.historyBefore, [layer.id], { selectedShape });
         }
       } else if (tracker.preview?.type === "marquee" || tracker.preview?.type === "lasso") {
-        const rect = clipRectToLayer(normalizeRect(tracker.preview), layer);
+        const selection = tracker.preview.type === "lasso" ? makePolygonSelection(tracker.preview.points) : null;
+        const rect = clipRectToLayer(normalizeRect(selection?.rect || tracker.preview), layer);
         if (rect.w < 2 || rect.h < 2) {
           setSelectionMask(null);
         } else {
-          setSelectionMask({ layerId: layer.id, rect, floating: null });
+          setSelectionMask({ layerId: layer.id, rect, mask: selection?.mask || null, floating: null });
         }
       }
     } else if (tool === "gradient" && layer?.type === "raster" && tracker.historyBefore && tracker.moved) {
