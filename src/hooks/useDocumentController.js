@@ -419,6 +419,40 @@ export default function useDocumentController({
     withFullHistory,
   ]);
 
+  const commitAdjustment = useCallback(({ layerId, nextImageData } = {}) => {
+    const id = layerId || activeId;
+    const layer = docRef.current.layers[id];
+    if (!layer) {
+      triggerFeedback("image-op", "error", 180);
+      flash("Select a raster layer to adjust.", "error");
+      return false;
+    }
+    if (layer.type !== "raster" || !layer.canvas) {
+      triggerFeedback("image-op", "error", 180);
+      flash("Adjustments need an active raster layer.", "error");
+      return false;
+    }
+    if (layer.locked) {
+      triggerFeedback("image-op", "error", 180);
+      flash(`${layer.name} is locked. Unlock it to adjust.`, "error");
+      return false;
+    }
+    if (!nextImageData || nextImageData.width !== layer.canvas.width || nextImageData.height !== layer.canvas.height) {
+      triggerFeedback("image-op", "error", 180);
+      flash("Adjustment output does not match the active layer.", "error");
+      return false;
+    }
+
+    withFullHistory(() => {
+      layer.canvas.getContext("2d").putImageData(nextImageData, 0, 0);
+      layer.contentHint = "edited";
+      return { docW, docH, activeId, selectedShape };
+    });
+    triggerFeedback("image-op", "success", 140);
+    flash("Adjustment applied", "success", 1200);
+    return true;
+  }, [activeId, docH, docRef, docW, flash, selectedShape, triggerFeedback, withFullHistory]);
+
   const recoverDraftProject = useCallback(() => {
     if (!recoveryDraft?.project) return;
     hydrateDraftPayload(recoveryDraft.project)
@@ -497,6 +531,7 @@ export default function useDocumentController({
     handleClipboardRead,
     applyResizeCanvas,
     applyNewDocument,
+    commitAdjustment,
     recoverDraftProject,
     discardRecoveredDraft,
     handleExport,

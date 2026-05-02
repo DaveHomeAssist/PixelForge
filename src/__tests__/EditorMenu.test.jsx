@@ -22,6 +22,8 @@ function renderMenu(overrides = {}) {
       flip: vi.fn(),
     },
     editActions: {
+      canDeselect: false,
+      deselect: vi.fn(),
       adjust: vi.fn(),
       filter: vi.fn(),
     },
@@ -81,5 +83,29 @@ describe("EditorMenu", () => {
     fireEvent.click(screen.getByRole("button", { name: /view/i }));
     fireEvent.click(screen.getByRole("menuitem", { name: /toggle grid/i }));
     expect(props.workspaceActions.toggle).toHaveBeenCalledWith("showGrid");
+  });
+
+  it("exposes deselect when a selection is active", () => {
+    const props = renderMenu({
+      editActions: {
+        canDeselect: true,
+        deselect: vi.fn(),
+        adjust: vi.fn(),
+        filter: vi.fn(),
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /edit/i }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /deselect/i }));
+
+    expect(props.editActions.deselect).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables deselect when no raster marquee is active", () => {
+    renderMenu();
+
+    fireEvent.click(screen.getByRole("button", { name: /edit/i }));
+
+    expect(screen.getByRole("menuitem", { name: /deselect/i }).disabled).toBe(true);
   });
 });

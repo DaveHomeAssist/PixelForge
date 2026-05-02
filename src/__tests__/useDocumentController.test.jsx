@@ -100,6 +100,35 @@ function makeArgs(overrides = {}) {
   };
 }
 
+function makeImageData(pixels, width = 2, height = 1) {
+  return new ImageData(new Uint8ClampedArray(pixels), width, height);
+}
+
+function makeRasterLayer({ id = "layer-1", locked = false, pixels } = {}) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 2;
+  canvas.height = 1;
+  canvas.getContext("2d").putImageData(makeImageData(pixels || [
+    10, 20, 30, 255, 100, 110, 120, 255,
+  ]), 0, 0);
+  return {
+    id,
+    name: "Raster",
+    type: "raster",
+    canvas,
+    visible: true,
+    opacity: 1,
+    blend: "source-over",
+    locked,
+    ox: 0,
+    oy: 0,
+  };
+}
+
+function readCanvasPixels(canvas) {
+  return Array.from(canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height).data);
+}
+
 describe("useDocumentController", () => {
   const originalRaf = globalThis.requestAnimationFrame;
 
@@ -259,5 +288,43 @@ describe("useDocumentController", () => {
     });
 
     expect(createRasterLayerFromImage).toHaveBeenCalledWith(file, expect.objectContaining({ name: "Pasted Image" }));
+  });
+
+  it("commitAdjustment records one history entry and captured snapshots undo and redo the pixels", () => {
+    const layer = makeRasterLayer();
+    const docRef = { current: { layers: { "layer-1": layer }, order: ["layer-1"] } };
+    const history = [];
+    const originalPixels = readCanvasPixels(layer.canvas);
+    const nextImageData = makeImageData([
+      200, 190, 180, 255, 20, 30, 40, 255,
+    ]);
+    const args = makeArgs({
+      historyApi: {
+        withFullHistory: vi.fn((mutate) => {
+          const before = layer.canvas.getContext("2d").getImageData(0, 0, layer.canvas.width, layer.canvas.height);
+          const meta = mutate();
+          const after = layer.canvas.getContext("2d").getImageData(0, 0, layer.canvas.width, layer.canvas.height);
+          history.push({ before, after, meta });
+        }),
+      },
+    });
+    args.docRef = docRef;
+
+    const { result } = renderHook(() => useDocumentController(args));
+    const previousHistoryLength = history.length;
+
+    act(() => {
+      expect(result.current.commitAdjustment({ layerId: "layer-1", nextImageData })).toBe(true);
+    });
+
+    expect(history).toHaveLength(previousHistoryLength + 1);
+    expect(args.historyApi.withFullHistory).toHaveBeenCalledTimes(1);
+    expect(readCanvasPixels(layer.canvas)).toEqual(Array.from(nextImageData.data));
+
+    layer.canvas.getContext("2d").putImageData(history[0].before, 0, 0);
+    expect(readCanvasPixels(layer.canvas)).toEqual(originalPixels);
+
+    layer.canvas.getContext("2d").putImageData(history[0].after, 0, 0);
+    expect(readCanvasPixels(layer.canvas)).toEqual(Array.from(nextImageData.data));
   });
 });

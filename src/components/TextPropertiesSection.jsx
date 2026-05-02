@@ -5,6 +5,13 @@ export default function TextPropertiesSection({ activeLayer, updateTextLayer, st
   if (!activeLayer || activeLayer.type !== "text") return null;
   const id = activeLayer.id;
   const patch = (partial) => updateTextLayer(id, partial);
+  const patchFontSize = (rawValue) => {
+    const text = `${rawValue ?? ""}`.trim();
+    if (!text) return;
+    const next = Math.round(Number(text));
+    if (!Number.isFinite(next)) return;
+    patch({ fontSize: Math.max(1, Math.min(512, next)) });
+  };
 
   return (
     <div className="pf-section">
@@ -43,13 +50,22 @@ export default function TextPropertiesSection({ activeLayer, updateTextLayer, st
             <input
               type="range"
               className="pf-slider"
-              min={8}
-              max={256}
+              min={1}
+              max={512}
               value={activeLayer.fontSize}
-              onChange={e => patch({ fontSize: +e.target.value })}
+              onChange={e => patchFontSize(e.target.value)}
               aria-label="Font size"
             />
-            <span style={{ fontSize: 10, color: "#6c7a84", minWidth: 34, textAlign: "right" }}>{activeLayer.fontSize}px</span>
+            <input
+              className="pf-input"
+              type="number"
+              min={1}
+              max={512}
+              value={activeLayer.fontSize}
+              onChange={e => patchFontSize(e.target.value)}
+              aria-label="Font size value"
+              style={{ width: 68, minHeight: 30, padding: "0 8px" }}
+            />
           </div>
         </div>
 

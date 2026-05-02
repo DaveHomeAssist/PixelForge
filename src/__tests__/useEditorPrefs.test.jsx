@@ -1,7 +1,7 @@
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import useEditorPrefs from "../hooks/useEditorPrefs.js";
-import { DEFAULT_PREFS, PREFS_KEY } from "../constants.js";
+import { DEFAULT_PREFS, PREFS_KEY, TIER2_FLAG_KEYS } from "../constants.js";
 
 function makeProps(overrides = {}) {
   return {
@@ -145,5 +145,55 @@ describe("useEditorPrefs", () => {
 
     const persisted = JSON.parse(window.localStorage.getItem(PREFS_KEY));
     expect(persisted.toolPrefs.brushSize).toBe(DEFAULT_PREFS.toolPrefs.brushSize);
+  });
+
+  it("keeps Tier 2 flags off by default in test and CI-like runs", () => {
+    expect(TIER2_FLAG_KEYS.length).toBeGreaterThan(0);
+    expect(Object.keys(DEFAULT_PREFS.uiPrefs.tier2Flags).sort()).toEqual([...TIER2_FLAG_KEYS].sort());
+    expect(Object.values(DEFAULT_PREFS.uiPrefs.tier2Flags).every(value => value === false)).toBe(true);
+  });
+
+  it("merges partial stored Tier 2 flags with the full flag map", async () => {
+    window.localStorage.setItem(PREFS_KEY, JSON.stringify({
+      uiPrefs: {
+        tier2Flags: {
+          adjustments: true,
+        },
+      },
+    }));
+
+    const { result } = renderHook((hookProps) => useEditorPrefs(hookProps), {
+      initialProps: makeProps(),
+    });
+
+    await waitFor(() => {
+      expect(result.current.prefs.uiPrefs.tier2Flags.adjustments).toBe(true);
+    });
+    expect(Object.keys(result.current.prefs.uiPrefs.tier2Flags).sort()).toEqual([...TIER2_FLAG_KEYS].sort());
+    expect(result.current.prefs.uiPrefs.tier2Flags.gradient).toBe(false);
+  });
+
+  it("persists Tier 2 flag updates", async () => {
+    const { result } = renderHook((hookProps) => useEditorPrefs(hookProps), {
+      initialProps: makeProps(),
+    });
+
+    act(() => {
+      result.current.updatePrefs(prev => ({
+        ...prev,
+        uiPrefs: {
+          ...prev.uiPrefs,
+          tier2Flags: {
+            ...prev.uiPrefs.tier2Flags,
+            gradient: true,
+          },
+        },
+      }));
+    });
+
+    await waitFor(() => {
+      const persisted = JSON.parse(window.localStorage.getItem(PREFS_KEY));
+      expect(persisted.uiPrefs.tier2Flags.gradient).toBe(true);
+    });
   });
 });

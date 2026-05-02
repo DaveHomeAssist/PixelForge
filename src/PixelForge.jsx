@@ -17,6 +17,7 @@ import ContextMenu from "./components/ContextMenu.jsx";
 import ExportModal from "./components/ExportModal.jsx";
 import CommandPalette from "./components/CommandPalette.jsx";
 import HistoryPanel from "./components/HistoryPanel.jsx";
+import AdjustModal from "./components/AdjustModal.jsx";
 import useEditorPrefs from "./hooks/useEditorPrefs.js";
 import useAutosaveRecovery from "./hooks/useAutosaveRecovery.js";
 import useHistory from "./hooks/useHistory.js";
@@ -99,7 +100,9 @@ export default function PixelForge() {
   const [exportOpen, setExportOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [adjustModal, setAdjustModal] = useState(null);
   const [clipboardStatus, setClipboardStatus] = useState(null);
+  const [screenPoint, setScreenPoint] = useState({ x: 0, y: 0 });
 
   /* ─── Refs ─── */
   const cvRef = useRef(null);
@@ -269,10 +272,37 @@ export default function PixelForge() {
     if (!vpRef.current) return;
     const vw = vpRef.current.clientWidth;
     const vh = vpRef.current.clientHeight;
-    const s = Math.min((vw - 80) / w, (vh - 80) / h, 1.75);
+    const padding = clamp(Math.min(vw, vh) * 0.11, 48, 120);
+    const availableW = Math.max(1, vw - padding * 2);
+    const availableH = Math.max(1, vh - padding * 2);
+    const s = clamp(Math.min(availableW / w, availableH / h), MIN_ZOOM, Math.min(MAX_ZOOM, 1.5));
     fitZoomRef.current = s;
     setZoom(s);
     setPan({ x: (vw - w * s) / 2, y: (vh - h * s) / 2 });
+  }, []);
+
+  const handleFitView = useCallback(() => {
+    fitViewTo(docW, docH);
+    triggerFeedback("zoom-fit", "success", 140);
+  }, [docH, docW, fitViewTo, triggerFeedback]);
+
+  const zoomAtViewportPoint = useCallback((factor, point = null) => {
+    const viewport = vpRef.current;
+    const anchor = point || {
+      x: (viewport?.clientWidth || 0) / 2,
+      y: (viewport?.clientHeight || 0) / 2,
+    };
+    fitZoomRef.current = null;
+    setZoom(previousZoom => {
+      const nextZoom = clamp(previousZoom * factor, MIN_ZOOM, MAX_ZOOM);
+      if (nextZoom === previousZoom) return previousZoom;
+      const ratio = nextZoom / previousZoom;
+      setPan(previousPan => ({
+        x: anchor.x - ratio * (anchor.x - previousPan.x),
+        y: anchor.y - ratio * (anchor.y - previousPan.y),
+      }));
+      return nextZoom;
+    });
   }, []);
 
   const {
@@ -312,6 +342,10 @@ export default function PixelForge() {
     pixelPreview: !!prefs.uiPrefs.pixelPreview,
     darkMode: !!prefs.uiPrefs.darkMode,
   }), [prefs.uiPrefs.darkMode, prefs.uiPrefs.pixelPreview, prefs.uiPrefs.showGrid, prefs.uiPrefs.showRulers, prefs.uiPrefs.snapToGrid]);
+  const tier2PreviewActive = useMemo(
+    () => Object.values(prefs.uiPrefs.tier2Flags || {}).some(Boolean),
+    [prefs.uiPrefs.tier2Flags],
+  );
   const toggleWorkspacePref = useCallback((key) => {
     updatePrefs(prev => mergePrefs(prev, { uiPrefs: { [key]: !prev.uiPrefs[key] } }));
   }, [updatePrefs]);
@@ -386,6 +420,7 @@ export default function PixelForge() {
     handleClipboardRead,
     applyResizeCanvas,
     applyNewDocument,
+    commitAdjustment,
     recoverDraftProject,
     discardRecoveredDraft,
     handleExport,
@@ -468,6 +503,7 @@ export default function PixelForge() {
     duplicateLayer,
     duplicateActiveLayer,
     mergeLayerDown,
+    rasterizeLayer,
   } = useLayerOps({
     docRef: doc,
     docW,
@@ -480,14 +516,15 @@ export default function PixelForge() {
     withFullHistory,
     capturePatchSnapshot,
     commitPatchHistory,
+    canEditLayer,
     triggerFeedback,
     flash,
   });
 
   const onCreateText = useCallback((at) => {
-    const newId = addTextLayerAt(at);
+    const newId = addTextLayerAt(at, { color: normalizeHexColor(color1, DEFAULT_PRIMARY) });
     if (newId) setEditingText({ layerId: newId });
-  }, [addTextLayerAt]);
+  }, [addTextLayerAt, color1]);
 
   const handleAIResult = useCallback(async (blob, promptText) => {
     const name = `AI: ${(promptText || "result").slice(0, 28)}`;
@@ -559,6 +596,7 @@ export default function PixelForge() {
     setIsPanning,
     setPan,
     setZoom,
+    setScreenPoint,
     bump,
     flash,
     triggerFeedback,
@@ -705,7 +743,7 @@ export default function PixelForge() {
     if (raf.current) cancelAnimationFrame(raf.current);
     raf.current = requestAnimationFrame(() => renderFrame());
     return () => { if (raf.current) cancelAnimationFrame(raf.current); };
-  }, [activeId, brushSize, docH, docW, findShapeRecord, pan, renderFrame, selectionMask, tick, tool, zoom]);
+  }, [activeId, brushSize, docH, docW, findShapeRecord, pan, selectionMask, tick, tool, zoom]);
 
   useEffect(() => {
     const obs = new ResizeObserver(() => {
@@ -762,21 +800,21 @@ export default function PixelForge() {
   }, [doRedo, triggerFeedback]);
 
   const zoomIn = useCallback(() => {
-    setZoom(z => clamp(z * 1.25, MIN_ZOOM, MAX_ZOOM));
+    zoomAtViewportPoint(1.2);
     triggerFeedback("zoom-in", "success", 140);
-  }, [triggerFeedback]);
+  }, [triggerFeedback, zoomAtViewportPoint]);
 
   const zoomOut = useCallback(() => {
-    setZoom(z => clamp(z * 0.8, MIN_ZOOM, MAX_ZOOM));
+    zoomAtViewportPoint(1 / 1.2);
     triggerFeedback("zoom-out", "success", 140);
-  }, [triggerFeedback]);
+  }, [triggerFeedback, zoomAtViewportPoint]);
 
   const showBrushCursor = ["brush", "eraser"].includes(tool);
   const brushCursorSize = Math.max(1, brushSize * zoom);
   const brushCursorStyle = {
     position: "absolute",
-    left: ts.current.scrX - brushCursorSize / 2,
-    top: ts.current.scrY - brushCursorSize / 2,
+    left: screenPoint.x - brushCursorSize / 2,
+    top: screenPoint.y - brushCursorSize / 2,
     width: brushCursorSize,
     height: brushCursorSize,
     border: tool === "eraser" ? "1px solid rgba(37, 52, 63, 0.72)" : "1px solid rgba(42, 111, 151, 0.82)",
@@ -979,7 +1017,7 @@ export default function PixelForge() {
     });
   }, [selectionMask]);
 
-  const escapeMarquee = useCallback(() => {
+  const deselectRasterSelection = useCallback(() => {
     if (!selectionMask) return false;
     const layer = doc.current.layers[selectionMask.layerId];
     if (layer && selectionMask.floating) {
@@ -990,6 +1028,8 @@ export default function PixelForge() {
     setSelectionMask(null);
     return true;
   }, [capturePatchSnapshot, commitPatchHistory, selectedShape, selectionMask]);
+
+  const escapeMarquee = useCallback(() => deselectRasterSelection(), [deselectRasterSelection]);
 
   const deleteSelectedShape = useCallback(() => {
     const record = findShapeRecord();
@@ -1095,6 +1135,46 @@ export default function PixelForge() {
     applyActiveRasterImageData(entry[0], entry[1]);
   }, [applyActiveRasterImageData]);
 
+  const readAdjustmentSource = useCallback(() => {
+    const layer = doc.current.layers[activeId];
+    if (!layer) {
+      triggerFeedback("image-op", "error", 180);
+      flash("Select a raster layer to adjust.", "error");
+      return null;
+    }
+    if (layer.type !== "raster" || !layer.canvas) {
+      triggerFeedback("image-op", "error", 180);
+      flash("Adjustments need an active raster layer.", "error");
+      return null;
+    }
+    if (!canEditLayer(layer, "adjust")) return null;
+    return {
+      layerId: layer.id,
+      imageData: layer.canvas.getContext("2d").getImageData(0, 0, layer.canvas.width, layer.canvas.height),
+    };
+  }, [activeId, canEditLayer, flash, triggerFeedback]);
+
+  const openAdjustmentModal = useCallback((kind) => {
+    const source = readAdjustmentSource();
+    if (!source) return;
+    setAdjustModal({ kind, layerId: source.layerId, sourceImageData: source.imageData });
+  }, [readAdjustmentSource]);
+
+  const commitImmediateAdjustment = useCallback((kind) => {
+    const source = readAdjustmentSource();
+    if (!source) return;
+    commitAdjustment({
+      layerId: source.layerId,
+      nextImageData: applyImageEffect(source.imageData, kind),
+    });
+  }, [commitAdjustment, readAdjustmentSource]);
+
+  const commitModalAdjustment = useCallback((nextImageData) => {
+    const layerId = adjustModal?.layerId;
+    setAdjustModal(null);
+    commitAdjustment({ layerId, nextImageData });
+  }, [adjustModal, commitAdjustment]);
+
   const toggleLayerFlag = useCallback((layerId, field, label) => {
     const layer = doc.current.layers[layerId || activeId];
     if (!layer) return;
@@ -1199,6 +1279,10 @@ export default function PixelForge() {
       { label: "Delete", onClick: deleteSelectedShape, danger: true },
       { separator: true },
     ] : []),
+    ...(selectionMask ? [
+      { label: "Deselect Selection", onClick: deselectRasterSelection },
+      { separator: true },
+    ] : []),
     { label: "Paste", onClick: pasteClipboard },
     { label: "Select All", onClick: selectAllActive },
     { label: "Fit To View", onClick: handleFitView },
@@ -1208,7 +1292,7 @@ export default function PixelForge() {
     { separator: true },
     { label: "Crop To Selection", onClick: cropSelection, disabled: !selectionMask },
     { label: "Trim Transparent Edges", onClick: trimCanvas },
-  ], [addLayer, cropSelection, deleteSelectedShape, duplicateSelectedShape, handleFitView, moveSelectedShapeOrder, pasteClipboard, selectAllActive, selectedShape, selectionMask, setMobilePanelTab, trimCanvas]);
+  ], [addLayer, cropSelection, deleteSelectedShape, deselectRasterSelection, duplicateSelectedShape, handleFitView, moveSelectedShapeOrder, pasteClipboard, selectAllActive, selectedShape, selectionMask, setMobilePanelTab, trimCanvas]);
 
   const canMergeLayerDown = useCallback((layerId) => {
     const index = layers.findIndex(layer => layer.id === layerId);
@@ -1217,26 +1301,30 @@ export default function PixelForge() {
     return !!upper && !!lower && upper.type === "raster" && lower.type === "raster";
   }, [layers]);
 
-  const layerContextItems = useCallback((layerId) => [
-    { label: "Rename", onClick: () => { setActiveId(layerId); flash("Edit the layer name field to rename.", "info", 1200); } },
-    { label: "Duplicate", onClick: () => duplicateLayer(layerId) },
-    { label: "Delete", onClick: () => delLayer(layerId), danger: true, disabled: layers.length <= 1 },
-    { separator: true },
-    { label: "Move Up", onClick: () => moveLayer(layerId, 1) },
-    { label: "Move Down", onClick: () => moveLayer(layerId, -1) },
-    { label: "Move To Top", onClick: () => moveLayer(layerId, "top") },
-    { label: "Move To Bottom", onClick: () => moveLayer(layerId, "bottom") },
-    { separator: true },
-    { label: "Toggle Visibility", onClick: () => toggleVis(layerId) },
-    { label: "Toggle Lock", onClick: () => toggleLock(layerId) },
-    { label: "Merge Down", onClick: () => mergeLayerDown(layerId), disabled: layerId !== activeId || !canMergeLayerDown(layerId) },
-    { separator: true },
-    { label: "Toggle Mask", onClick: () => toggleLayerFlag(layerId, "maskEnabled", "Layer mask toggled") },
-    { label: "Toggle Clipping", onClick: () => toggleLayerFlag(layerId, "clipToBelow", "Clipping mask toggled") },
-    { label: "Drop Shadow", onClick: () => setLayerEffect(layerId, "shadow") },
-    { label: "Glow", onClick: () => setLayerEffect(layerId, "glow") },
-    { label: "Blur Effect", onClick: () => setLayerEffect(layerId, "blur") },
-  ], [activeId, canMergeLayerDown, delLayer, duplicateLayer, flash, layers.length, mergeLayerDown, moveLayer, setActiveId, setLayerEffect, toggleLayerFlag, toggleLock, toggleVis]);
+  const layerContextItems = useCallback((layerId) => {
+    const layer = doc.current.layers[layerId];
+    return [
+      { label: "Rename", onClick: () => { setActiveId(layerId); flash("Edit the layer name field to rename.", "info", 1200); } },
+      { label: "Duplicate", onClick: () => duplicateLayer(layerId) },
+      { label: "Delete", onClick: () => delLayer(layerId), danger: true, disabled: layers.length <= 1 },
+      { separator: true },
+      { label: "Move Up", onClick: () => moveLayer(layerId, 1) },
+      { label: "Move Down", onClick: () => moveLayer(layerId, -1) },
+      { label: "Move To Top", onClick: () => moveLayer(layerId, "top") },
+      { label: "Move To Bottom", onClick: () => moveLayer(layerId, "bottom") },
+      { separator: true },
+      { label: "Toggle Visibility", onClick: () => toggleVis(layerId) },
+      { label: "Toggle Lock", onClick: () => toggleLock(layerId) },
+      { label: "Merge Down", onClick: () => mergeLayerDown(layerId), disabled: layerId !== activeId || !canMergeLayerDown(layerId) },
+      { label: "Rasterize Layer", onClick: () => rasterizeLayer(layerId), disabled: !layer || layer.type === "raster" },
+      { separator: true },
+      { label: "Toggle Mask", onClick: () => toggleLayerFlag(layerId, "maskEnabled", "Layer mask toggled") },
+      { label: "Toggle Clipping", onClick: () => toggleLayerFlag(layerId, "clipToBelow", "Clipping mask toggled") },
+      { label: "Drop Shadow", onClick: () => setLayerEffect(layerId, "shadow") },
+      { label: "Glow", onClick: () => setLayerEffect(layerId, "glow") },
+      { label: "Blur Effect", onClick: () => setLayerEffect(layerId, "blur") },
+    ];
+  }, [activeId, canMergeLayerDown, delLayer, duplicateLayer, flash, layers.length, mergeLayerDown, moveLayer, rasterizeLayer, setActiveId, setLayerEffect, toggleLayerFlag, toggleLock, toggleVis]);
 
   /* ─── Keyboard ─── */
   useEffect(() => {
@@ -1266,8 +1354,7 @@ export default function PixelForge() {
       if ((e.ctrlKey || e.metaKey) && key === "a" && !typing) {
         e.preventDefault();
         if (e.shiftKey) {
-          setSelectionMask(null);
-          clearSelection();
+          deselectRasterSelection();
         } else {
           selectAllActive();
         }
@@ -1331,7 +1418,7 @@ export default function PixelForge() {
     const ku = (e) => { if (e.code === "Space") { space.current = false; setIsSpaceHeld(false); } };
     window.addEventListener("keydown", kd); window.addEventListener("keyup", ku);
     return () => { window.removeEventListener("keydown", kd); window.removeEventListener("keyup", ku); };
-  }, [activeId, clearSelection, copyMarquee, cutMarquee, deleteMarquee, deleteSelectedShape, duplicateActiveLayer, duplicateSelectedShape, escapeMarquee, handleFitView, handleRedo, handleSave, handleUndo, moveLayer, nudgeMarquee, nudgeSelectedShape, selectAllActive, selectTool, selectedShape, selectionMask, swapColors, zoomIn, zoomOut]);
+  }, [activeId, clearSelection, copyMarquee, cutMarquee, deleteMarquee, deleteSelectedShape, deselectRasterSelection, duplicateActiveLayer, duplicateSelectedShape, escapeMarquee, handleFitView, handleRedo, handleSave, handleUndo, moveLayer, nudgeMarquee, nudgeSelectedShape, selectAllActive, selectTool, selectedShape, selectionMask, swapColors, zoomIn, zoomOut]);
 
   function commitActiveLayerName() {
     if (!activeId) return;
@@ -1370,12 +1457,6 @@ export default function PixelForge() {
     pulseLayer(targetId, "success");
     setDragLayerId(null);
     setDragOverLayerId(null);
-  }
-
-  function fitView() { fitViewTo(docW, docH); }
-  function handleFitView() {
-    fitView();
-    triggerFeedback("zoom-fit", "success", 140);
   }
 
   /* ─── Derived ─── */
@@ -1453,12 +1534,14 @@ export default function PixelForge() {
     { id: "cmd-dark", label: workspace.darkMode ? "Light Mode" : "Dark Mode", group: "View", run: () => toggleWorkspacePref("darkMode") },
     { id: "cmd-history", label: "Open History Panel", group: "Workspace", run: () => setHistoryOpen(true) },
     { id: "cmd-reference", label: "Add Reference Layer", group: "Workspace", run: makeReferenceLayer },
+    { id: "cmd-deselect", label: "Deselect", group: "Edit", run: deselectRasterSelection, disabled: !selectionMask },
+    { id: "cmd-rasterize", label: "Rasterize Active Layer", group: "Layer", run: () => rasterizeLayer(activeId), disabled: !activeLayer || activeLayer.type === "raster" },
     { id: "cmd-mask", label: "Toggle Layer Mask", group: "Layer", run: () => toggleLayerFlag(activeId, "maskEnabled", "Layer mask toggled"), disabled: !activeId },
     { id: "cmd-clip", label: "Toggle Clipping Mask", group: "Layer", run: () => toggleLayerFlag(activeId, "clipToBelow", "Clipping mask toggled"), disabled: !activeId },
     { id: "cmd-shadow", label: "Toggle Drop Shadow", group: "Layer Effects", run: () => setLayerEffect(activeId, "shadow"), disabled: !activeId },
     { id: "cmd-glow", label: "Toggle Glow", group: "Layer Effects", run: () => setLayerEffect(activeId, "glow"), disabled: !activeId },
     { id: "cmd-effect-blur", label: "Toggle Layer Blur", group: "Layer Effects", run: () => setLayerEffect(activeId, "blur"), disabled: !activeId },
-  ], [activeId, applyAdjustment, applyFilter, makeReferenceLayer, setLayerEffect, toggleLayerFlag, toggleWorkspacePref, workspace.darkMode, workspace.pixelPreview, workspace.showGrid, workspace.showRulers, workspace.snapToGrid]);
+  ], [activeId, activeLayer, applyAdjustment, applyFilter, deselectRasterSelection, makeReferenceLayer, rasterizeLayer, selectionMask, setLayerEffect, toggleLayerFlag, toggleWorkspacePref, workspace.darkMode, workspace.pixelPreview, workspace.showGrid, workspace.showRulers, workspace.snapToGrid]);
 
   /* ═══════════════════════════════════════════════════
      JSX
@@ -1480,6 +1563,7 @@ export default function PixelForge() {
         handleOpenExport={() => setExportOpen(true)}
         handleQuickExport={quickExport}
         handleOpenAIGenerate={() => setAiModal("generate")}
+        prefs={prefs}
         imageActions={{
           canCrop: !!selectionMask,
           crop: cropSelection,
@@ -1488,8 +1572,14 @@ export default function PixelForge() {
           flip: flipDocument,
         }}
         editActions={{
+          canDeselect: !!selectionMask,
+          deselect: deselectRasterSelection,
           adjust: (effect) => applyAdjustment(effect, 0, `${effect} applied`),
           filter: applyFilter,
+        }}
+        adjustmentActions={{
+          open: openAdjustmentModal,
+          commit: commitImmediateAdjustment,
         }}
         workspaceActions={{
           toggle: toggleWorkspacePref,
@@ -1760,6 +1850,7 @@ export default function PixelForge() {
               toggleLock={toggleLock}
               duplicateActiveLayer={duplicateActiveLayer}
               mergeLayerDown={mergeLayerDown}
+              rasterizeLayer={rasterizeLayer}
               canMergeDown={canMergeDown}
               addLayer={addLayer}
               delLayer={delLayer}
@@ -1807,6 +1898,7 @@ export default function PixelForge() {
         isDirty={isDirty}
         lastSavedAt={lastSavedAt}
         clipboardStatus={clipboardStatus}
+        tier2PreviewActive={tier2PreviewActive}
       />
 
       {/* ── Toast ── */}
@@ -1842,6 +1934,14 @@ export default function PixelForge() {
         onUndo={handleUndo}
         onRedo={handleRedo}
         onClose={() => setHistoryOpen(false)}
+      />
+
+      <AdjustModal
+        open={!!adjustModal}
+        kind={adjustModal?.kind}
+        sourceImageData={adjustModal?.sourceImageData}
+        onCancel={() => setAdjustModal(null)}
+        onCommit={commitModalAdjustment}
       />
 
       <NewDocumentModal

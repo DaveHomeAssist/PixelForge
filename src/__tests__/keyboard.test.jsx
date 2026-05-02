@@ -74,7 +74,7 @@ describe("PixelForge keyboard shortcuts", () => {
     const initialZoom = latestRenderArgs().zoom;
 
     fireEvent.keyDown(window, { key: "=", metaKey: true });
-    await waitFor(() => expect(latestRenderArgs().zoom).toBeCloseTo(initialZoom * 1.25));
+    await waitFor(() => expect(latestRenderArgs().zoom).toBeCloseTo(initialZoom * 1.2));
 
     fireEvent.keyDown(window, { key: "-", metaKey: true });
     await waitFor(() => expect(latestRenderArgs().zoom).toBeCloseTo(initialZoom));

@@ -1,3 +1,5 @@
+import { adjustRgbHsl } from "./colorOps.js";
+
 function clampByte(value) {
   return Math.max(0, Math.min(255, Math.round(value)));
 }
@@ -6,11 +8,17 @@ function luminance(r, g, b) {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
-export function applyImageEffect(imageData, effect, amount = 0) {
+export function applyImageEffect(imageData, effect, amount = 0, options = {}) {
+  if (effect === "blur" || effect === "gaussianBlur") return blurImageData(imageData);
+  if (effect === "sharpen") return sharpenImageData(imageData);
+  if (effect === "motionBlur") return motionBlurImageData(imageData, amount);
+
   const next = new ImageData(new Uint8ClampedArray(imageData.data), imageData.width, imageData.height);
   const data = next.data;
   const amt = Number(amount) || 0;
+  const rng = typeof options.rng === "function" ? options.rng : Math.random;
   for (let i = 0; i < data.length; i += 4) {
+    if (options.signal?.aborted) break;
     const r = data[i];
     const g = data[i + 1];
     const b = data[i + 2];
@@ -47,6 +55,27 @@ export function applyImageEffect(imageData, effect, amount = 0) {
       data[i] = clampByte(Math.round(r / step) * step);
       data[i + 1] = clampByte(Math.round(g / step) * step);
       data[i + 2] = clampByte(Math.round(b / step) * step);
+    } else if (effect === "hue") {
+      const rgb = adjustRgbHsl(r, g, b, amt, 1, 0);
+      data[i] = (rgb >> 16) & 255;
+      data[i + 1] = (rgb >> 8) & 255;
+      data[i + 2] = rgb & 255;
+    } else if (effect === "saturation") {
+      const rgb = adjustRgbHsl(r, g, b, 0, 1 + amt / 100, 0);
+      data[i] = (rgb >> 16) & 255;
+      data[i + 1] = (rgb >> 8) & 255;
+      data[i + 2] = rgb & 255;
+    } else if (effect === "lightness") {
+      const rgb = adjustRgbHsl(r, g, b, 0, 1, amt / 100);
+      data[i] = (rgb >> 16) & 255;
+      data[i + 1] = (rgb >> 8) & 255;
+      data[i + 2] = rgb & 255;
+    } else if (effect === "noise") {
+      const strength = Math.max(0, Math.min(255, Math.abs(amt)));
+      const delta = (rng() * 2 - 1) * strength;
+      data[i] = clampByte(r + delta);
+      data[i + 1] = clampByte(g + delta);
+      data[i + 2] = clampByte(b + delta);
     } else if (effect === "hue-sat") {
       const gray = luminance(r, g, b);
       const sat = 1 + amt / 100;
@@ -89,11 +118,55 @@ export function convolveImageData(imageData, kernel, divisor = 1, bias = 0) {
 }
 
 export function blurImageData(imageData) {
+  // TODO Phase 6.5.x: worker-offload kernel filters when 1024² buffers exceed the 50ms target.
   return convolveImageData(imageData, [1, 2, 1, 2, 4, 2, 1, 2, 1], 16);
 }
 
 export function sharpenImageData(imageData) {
   return convolveImageData(imageData, [0, -1, 0, -1, 5, -1, 0, -1, 0], 1);
+}
+
+export function motionBlurImageData(imageData, amount = 8) {
+  const { width, height } = imageData;
+  const source = imageData.data;
+  const next = new ImageData(new Uint8ClampedArray(source), width, height);
+  const target = next.data;
+  const radius = Math.max(1, Math.min(64, Math.round(Math.abs(Number(amount) || 8))));
+  const size = radius * 2 + 1;
+
+  for (let y = 0; y < height; y += 1) {
+    let rr = 0;
+    let gg = 0;
+    let bb = 0;
+    let aa = 0;
+    for (let k = -radius; k <= radius; k += 1) {
+      const x = Math.max(0, Math.min(width - 1, k));
+      const idx = (y * width + x) * 4;
+      rr += source[idx];
+      gg += source[idx + 1];
+      bb += source[idx + 2];
+      aa += source[idx + 3];
+    }
+
+    for (let x = 0; x < width; x += 1) {
+      const out = (y * width + x) * 4;
+      target[out] = clampByte(rr / size);
+      target[out + 1] = clampByte(gg / size);
+      target[out + 2] = clampByte(bb / size);
+      target[out + 3] = clampByte(aa / size);
+
+      const removeX = Math.max(0, Math.min(width - 1, x - radius));
+      const addX = Math.max(0, Math.min(width - 1, x + radius + 1));
+      const removeIdx = (y * width + removeX) * 4;
+      const addIdx = (y * width + addX) * 4;
+      rr += source[addIdx] - source[removeIdx];
+      gg += source[addIdx + 1] - source[removeIdx + 1];
+      bb += source[addIdx + 2] - source[removeIdx + 2];
+      aa += source[addIdx + 3] - source[removeIdx + 3];
+    }
+  }
+
+  return next;
 }
 
 export function findConnectedBounds(imageData, startX, startY, tolerance = 16) {

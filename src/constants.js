@@ -19,6 +19,24 @@ export const RECENT_SIZES_LIMIT = 5;
 export const RECENT_PRESETS_LIMIT = 4;
 export const HEX_COLOR_RE = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
 
+export const TIER2_FLAG_KEYS = [
+  "adjustments",
+  "hslPicker",
+  "gradient",
+  "lasso",
+  "multiSelect",
+  "workspace",
+  "pressure",
+];
+
+const tier2PreviewDefaultOn = !!import.meta.env?.DEV &&
+  import.meta.env.MODE !== "test" &&
+  !globalThis.process?.env?.CI;
+
+export const DEFAULT_TIER2_FLAGS = Object.fromEntries(
+  TIER2_FLAG_KEYS.map(key => [key, tier2PreviewDefaultOn]),
+);
+
 export const RESIZE_ANCHORS = [
   ["nw", "n", "ne"],
   ["w", "center", "e"],
@@ -29,6 +47,7 @@ export const DEFAULT_PREFS = {
   uiPrefs: {
     mobileTab: "next",
     collapsedSections: {},
+    tier2Flags: DEFAULT_TIER2_FLAGS,
     showGrid: false,
     showRulers: false,
     snapToGrid: false,

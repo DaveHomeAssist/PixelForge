@@ -14,6 +14,7 @@ export default function LayersSection({
   toggleLock,
   duplicateActiveLayer,
   mergeLayerDown,
+  rasterizeLayer,
   canMergeDown,
   addLayer,
   delLayer,
@@ -68,6 +69,7 @@ export default function LayersSection({
           <div className="pf-inline-actions" style={{ marginTop: 8 }}>
             <button className={`pf-layer-abtn ${feedbackClass("layer-duplicate")}`} onClick={duplicateActiveLayer}>Duplicate</button>
             <button className={`pf-layer-abtn ${feedbackClass("layer-merge")}`} onClick={() => mergeLayerDown(activeId)} disabled={!canMergeDown}>Merge Down</button>
+            <button className={`pf-layer-abtn ${feedbackClass("layer-rasterize")}`} onClick={() => rasterizeLayer?.(activeId)} disabled={activeLayer.type === "raster"}>Rasterize</button>
           </div>
         </div>
       )}

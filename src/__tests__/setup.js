@@ -1,5 +1,10 @@
 import "fake-indexeddb/auto";
 import "vitest-canvas-mock";
+import { DEFAULT_PREFS } from "../constants.js";
+
+if (globalThis.process?.env?.NODE_ENV === "test" && Object.values(DEFAULT_PREFS.uiPrefs.tier2Flags).some(Boolean)) {
+  throw new Error("Tier 2 flags must default off in test runs.");
+}
 
 if (!window.matchMedia) {
   Object.defineProperty(window, "matchMedia", {

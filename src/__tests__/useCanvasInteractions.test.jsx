@@ -1,5 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { MAX_ZOOM, MIN_ZOOM } from "../constants.js";
 import useCanvasInteractions from "../hooks/useCanvasInteractions.js";
 
 function makeArgs(overrides = {}) {
@@ -46,6 +47,8 @@ function makeArgs(overrides = {}) {
     bump: vi.fn(),
     flash: vi.fn(),
     triggerFeedback: vi.fn(),
+    selectionMask: null,
+    setSelectionMask: vi.fn(),
     ...overrides,
   };
 }
@@ -91,5 +94,70 @@ describe("useCanvasInteractions", () => {
 
     expect(args.panningRef.current).toBe(false);
     expect(args.setIsPanning).toHaveBeenCalledWith(false);
+  });
+
+  it("anchors wheel zoom at the cursor", () => {
+    let zoom = 2;
+    let pan = { x: -100, y: -50 };
+    const args = makeArgs({
+      tool: "brush",
+      zoom,
+      pan,
+      setZoom: vi.fn((updater) => {
+        zoom = updater(zoom);
+      }),
+      setPan: vi.fn((updater) => {
+        pan = typeof updater === "function" ? updater(pan) : updater;
+      }),
+    });
+    renderHook(() => useCanvasInteractions(args));
+
+    act(() => {
+      args.vpRef.current.dispatchEvent(new WheelEvent("wheel", {
+        clientX: 250,
+        clientY: 180,
+        deltaY: -100,
+        cancelable: true,
+      }));
+    });
+
+    const docX = (250 - (-100)) / 2;
+    const docY = (180 - (-50)) / 2;
+    expect((250 - pan.x) / zoom).toBeCloseTo(docX);
+    expect((180 - pan.y) / zoom).toBeCloseTo(docY);
+  });
+
+  it("clamps wheel zoom to configured bounds", () => {
+    let zoom = 0.021;
+    const args = makeArgs({
+      tool: "brush",
+      zoom,
+      setZoom: vi.fn((updater) => {
+        zoom = updater(zoom);
+      }),
+      setPan: vi.fn(),
+    });
+    renderHook(() => useCanvasInteractions(args));
+
+    act(() => {
+      args.vpRef.current.dispatchEvent(new WheelEvent("wheel", {
+        clientX: 10,
+        clientY: 10,
+        deltaY: 5000,
+        cancelable: true,
+      }));
+    });
+    expect(zoom).toBe(MIN_ZOOM);
+
+    zoom = 63.9;
+    act(() => {
+      args.vpRef.current.dispatchEvent(new WheelEvent("wheel", {
+        clientX: 10,
+        clientY: 10,
+        deltaY: -5000,
+        cancelable: true,
+      }));
+    });
+    expect(zoom).toBe(MAX_ZOOM);
   });
 });

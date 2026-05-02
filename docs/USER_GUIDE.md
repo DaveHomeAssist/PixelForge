@@ -112,6 +112,7 @@ Each layer has **visibility**, **opacity** (0–100%), a **blend mode** (12 opti
 - **+ Raster / + Vector / + Text** — add a new empty layer
 - **Duplicate** — copy the active layer with offset
 - **Merge Down** — flatten the active layer onto the raster below it (only between adjacent raster layers)
+- **Rasterize** — convert the active vector or text layer into a raster layer in place; raster layers are already pixels, so the action is disabled for them
 - **↑ / ↓** — reorder
 - **Drag** any layer row to reorder by drop
 - **Rename** — edit the name at the top of the Layers section
@@ -148,7 +149,7 @@ To export only some layers, hide the others first.
 With a text layer selected, the right-panel **Text** section lets you change:
 
 - **Font** — 8 options: 4 system fonts (Sans, Serif, Mono, Arial) + 4 Google Fonts (Inter, Playfair, JetBrains Mono, Roboto)
-- **Size** — 8px to 256px
+- **Size** — 1px to 512px
 - **Weight** — Regular / Bold
 - **Italic** — toggle
 - **Color** — any hex color
@@ -177,6 +178,7 @@ The marquee tool cuts, copies, and moves regions of pixels.
 | `Ctrl+V` / `Cmd+V` | Paste as a new raster layer |
 | `Delete` / `Backspace` | Clear pixels in the selection |
 | `Esc` | Commit any move, then deselect |
+| `Ctrl+Shift+A` / `Cmd+Shift+A` | Deselect without changing the active layer or tool |
 | `←↑↓→` | Nudge selection 1 pixel (hold **Shift** for 10) |
 
 Switching to any other tool commits a floating selection automatically — no "accidentally lost my move" moment.
@@ -185,6 +187,7 @@ Notes:
 - The marquee operates on the **active raster layer**. Vector and text layers are ignored.
 - The clipboard is internal to PixelForge; it doesn't write to your OS clipboard.
 - Pasting anywhere in PixelForge with an image in your system clipboard still imports that image (drag-drop style).
+- PixelForge does not support multi-select layer operations; rasterize applies to one active layer at a time.
 
 ---
 

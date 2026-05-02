@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { uid, cloneShape, makeCanvas, reorderList } from "../utils.js";
-import { DEFAULT_TEXT_LAYER } from "../text.js";
+import { drawShape } from "../shapes.js";
+import { DEFAULT_TEXT_LAYER, drawText } from "../text.js";
 
 function duplicateShapeOffset(shape) {
   if (shape.type === "line" || shape.type === "path") {
@@ -21,6 +22,7 @@ export default function useLayerOps({
   withFullHistory,
   capturePatchSnapshot,
   commitPatchHistory,
+  canEditLayer,
   triggerFeedback,
   flash,
 }) {
@@ -56,7 +58,7 @@ export default function useLayerOps({
     triggerFeedback(feedbackKey, "success");
   }, [docH, docRef, docW, setActiveId, setSelectedShape, triggerFeedback, withFullHistory]);
 
-  const addTextLayerAt = useCallback((at) => {
+  const addTextLayerAt = useCallback((at, textStyle = {}) => {
     let newId = null;
     withFullHistory(() => {
       const d = docRef.current;
@@ -71,6 +73,7 @@ export default function useLayerOps({
         ox: Math.round(at?.x || 0),
         oy: Math.round(at?.y || 0),
         ...DEFAULT_TEXT_LAYER,
+        ...textStyle,
       };
       d.layers[layer.id] = layer;
       d.order.push(layer.id);
@@ -235,6 +238,49 @@ export default function useLayerOps({
     triggerFeedback("layer-merge", "success");
   }, [docRef, flash, getLayer, selectedShape, setActiveId, setSelectedShape, triggerFeedback, withFullHistory]);
 
+  const rasterizeLayer = useCallback((layerId = activeId) => {
+    const layer = getLayer(layerId);
+    if (!layer) return;
+    if (layer.type === "raster") {
+      triggerFeedback("layer-rasterize", "error");
+      flash("Layer is already raster.", "info", 1200);
+      return;
+    }
+    if (canEditLayer && !canEditLayer(layer, "rasterize this layer")) return;
+
+    withFullHistory(() => {
+      const canvas = makeCanvas(docW, docH);
+      const ctx = canvas.getContext("2d");
+      if (layer.type === "text") {
+        drawText(ctx, { ...layer, ox: 0, oy: 0 });
+      } else {
+        layer.shapes.forEach(shape => drawShape(ctx, shape));
+      }
+
+      docRef.current.layers[layer.id] = {
+        id: layer.id,
+        name: layer.name,
+        type: "raster",
+        visible: layer.visible,
+        opacity: layer.opacity,
+        blend: layer.blend,
+        locked: !!layer.locked,
+        contentHint: "edited",
+        effect: layer.effect || null,
+        maskEnabled: !!layer.maskEnabled,
+        clipToBelow: !!layer.clipToBelow,
+        canvas,
+        ox: layer.ox,
+        oy: layer.oy,
+      };
+      setActiveId(layer.id);
+      setSelectedShape(null);
+      return { activeId: layer.id, selectedShape: null };
+    });
+    triggerFeedback("layer-rasterize", "success");
+    flash("Layer rasterized", "success", 1200);
+  }, [activeId, canEditLayer, docH, docRef, docW, flash, getLayer, setActiveId, setSelectedShape, triggerFeedback, withFullHistory]);
+
   return {
     addLayer,
     addTextLayerAt,
@@ -249,5 +295,6 @@ export default function useLayerOps({
     duplicateLayer,
     duplicateActiveLayer,
     mergeLayerDown,
+    rasterizeLayer,
   };
 }

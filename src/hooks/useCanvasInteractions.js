@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from "react";
 import {
   clamp, cloneShape, dist, ensureShape, extractRegion, rgbHex,
 } from "../utils.js";
+import { MAX_ZOOM, MIN_ZOOM } from "../constants.js";
 import {
   applyLineHandle, applyRectResize, getShapeHandles, hitShape,
 } from "../shapes.js";
@@ -58,6 +59,7 @@ export default function useCanvasInteractions({
   setIsPanning = () => {},
   setPan,
   setZoom,
+  setScreenPoint = () => {},
   bump,
   flash,
   triggerFeedback,
@@ -88,6 +90,15 @@ export default function useCanvasInteractions({
     const radius = Math.max(6, 10 / zoom);
     return getShapeHandles(shape).find(handle => dist(handle.x, handle.y, pointX, pointY) <= radius)?.id || null;
   }, [zoom]);
+
+  const updateScreenPoint = useCallback((event) => {
+    const rect = cvRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const point = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    tsRef.current.scrX = point.x;
+    tsRef.current.scrY = point.y;
+    setScreenPoint(point);
+  }, [cvRef, setScreenPoint, tsRef]);
 
   const commitRasterStroke = useCallback((layerId) => {
     const tracker = tsRef.current;
@@ -142,11 +153,7 @@ export default function useCanvasInteractions({
 
   const onDown = useCallback((event) => {
     event.preventDefault();
-    const rect = cvRef.current?.getBoundingClientRect();
-    if (rect) {
-      tsRef.current.scrX = event.clientX - rect.left;
-      tsRef.current.scrY = event.clientY - rect.top;
-    }
+    updateScreenPoint(event);
 
     if (event.button === 1 || (event.button === 0 && (spaceRef.current || tool === "hand"))) {
       panningRef.current = true;
@@ -403,14 +410,11 @@ export default function useCanvasInteractions({
     tool,
     triggerFeedback,
     tsRef,
+    updateScreenPoint,
   ]);
 
   const onMove = useCallback((event) => {
-    const rect = cvRef.current?.getBoundingClientRect();
-    if (rect) {
-      tsRef.current.scrX = event.clientX - rect.left;
-      tsRef.current.scrY = event.clientY - rect.top;
-    }
+    updateScreenPoint(event);
 
     if (panningRef.current) {
       setPan({
@@ -545,7 +549,6 @@ export default function useCanvasInteractions({
     bump,
     color1,
     color2,
-    cvRef,
     docRef,
     fillOn,
     findShapeRecord,
@@ -559,6 +562,7 @@ export default function useCanvasInteractions({
     strokeW,
     tool,
     tsRef,
+    updateScreenPoint,
   ]);
 
   const onUp = useCallback(() => {
@@ -664,9 +668,9 @@ export default function useCanvasInteractions({
       if (!rect) return;
       const mouseX = event.clientX - rect.left;
       const mouseY = event.clientY - rect.top;
-      const factor = event.deltaY < 0 ? 1.12 : 0.89;
+      const factor = clamp(Math.exp(-event.deltaY * 0.0012), 0.82, 1.22);
       setZoom(previousZoom => {
-        const nextZoom = clamp(previousZoom * factor, 0.02, 64);
+        const nextZoom = clamp(previousZoom * factor, MIN_ZOOM, MAX_ZOOM);
         const ratio = nextZoom / previousZoom;
         setPan(previousPan => ({
           x: mouseX - ratio * (mouseX - previousPan.x),
@@ -738,7 +742,7 @@ export default function useCanvasInteractions({
         if (!rect) return;
         const center = midpoint(event.touches);
         const previousZoom = state.zoom;
-        const nextZoom = clamp(previousZoom * (touchDistance(event.touches) / Math.max(1, state.distance)), 0.02, 64);
+        const nextZoom = clamp(previousZoom * (touchDistance(event.touches) / Math.max(1, state.distance)), MIN_ZOOM, MAX_ZOOM);
         const ratio = nextZoom / previousZoom;
         const mouseX = center.x - rect.left;
         const mouseY = center.y - rect.top;

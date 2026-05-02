@@ -9,6 +9,7 @@ export default function StatusBar({
   isDirty,
   lastSavedAt,
   clipboardStatus,
+  tier2PreviewActive = false,
 }) {
   const [isCoarsePointer, setIsCoarsePointer] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -32,6 +33,7 @@ export default function StatusBar({
       <span className="pf-status-accent">{(zoom * 100).toFixed(0)}%</span>
       {activeLayer && <span>{activeLayer.name} <span style={{ color: "#c8b9a8" }}>|</span> {activeLayer.type === "raster" ? "RASTER" : "VECTOR"}</span>}
       <span>{toolMeta.label}</span>
+      {tier2PreviewActive && <span className="pf-status-badge">Tier 2 (preview)</span>}
       {clipboardStatus && <span className="pf-status-accent">Clipboard {clipboardStatus}</span>}
       <span>{isDirty ? "Unsaved draft" : lastSavedAt ? `Saved ${new Date(lastSavedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "Ready"}</span>
       {isCoarsePointer ? (

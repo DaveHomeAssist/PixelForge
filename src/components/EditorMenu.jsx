@@ -3,6 +3,23 @@ import {
   Undo2, Redo2, Save, FolderOpen, Download, ZoomIn, ZoomOut, Maximize2, Menu, X, ChevronDown,
 } from "lucide-react";
 
+const ADJUSTMENT_MENU_ITEMS = [
+  ["Brightness…", "open", "brightness"],
+  ["Contrast…", "open", "contrast"],
+  ["Hue…", "open", "hue"],
+  ["Saturation…", "open", "saturation"],
+  ["Lightness…", "open", "lightness"],
+  ["Invert", "commit", "invert"],
+  ["Grayscale", "commit", "grayscale"],
+  ["Sepia", "commit", "sepia"],
+  ["Threshold…", "open", "threshold"],
+  ["Posterize…", "open", "posterize"],
+  ["Gaussian Blur…", "open", "gaussianBlur"],
+  ["Motion Blur…", "open", "motionBlur"],
+  ["Sharpen", "commit", "sharpen"],
+  ["Noise…", "open", "noise"],
+];
+
 export default function EditorMenu({
   feedbackClass,
   handleNewDocument,
@@ -14,8 +31,10 @@ export default function EditorMenu({
   handleOpenExport,
   handleQuickExport,
   handleOpenAIGenerate,
+  prefs,
   imageActions,
   editActions,
+  adjustmentActions,
   workspaceActions,
   openCommandPalette,
   openHistoryPanel,
@@ -66,6 +85,13 @@ export default function EditorMenu({
     action?.();
   };
   const toggleMenu = (id) => setOpenMenu(current => current === id ? null : id);
+  const adjustmentsEnabled = !!prefs?.uiPrefs?.tier2Flags?.adjustments;
+
+  const adjustmentMenuItem = ([label, mode, kind]) => menuItem(
+    label,
+    () => mode === "open" ? adjustmentActions?.open(kind) : adjustmentActions?.commit(kind),
+    { key: kind },
+  );
 
   const menuButton = (menuId, label) => (
     <button
@@ -82,6 +108,7 @@ export default function EditorMenu({
 
   const menuItem = (label, action, options = {}) => (
     <button
+      key={options.key}
       className={`pf-menu-item ${options.danger ? "danger" : ""}`}
       type="button"
       role="menuitem"
@@ -123,6 +150,7 @@ export default function EditorMenu({
             <div className="pf-menu-popover" role="menu" aria-label="Edit menu">
               {menuItem("Undo", doUndo, { shortcut: "Cmd Z", disabled: undoN === 0 })}
               {menuItem("Redo", doRedo, { shortcut: "Shift Cmd Z", disabled: redoN === 0 })}
+              {menuItem("Deselect", editActions?.deselect, { shortcut: "Esc", disabled: !editActions?.canDeselect })}
               <div className="pf-menu-rule" />
               {menuItem("Grayscale", () => editActions?.adjust("grayscale"))}
               {menuItem("Sharpen", () => editActions?.filter("sharpen"))}
@@ -140,6 +168,12 @@ export default function EditorMenu({
               <div className="pf-menu-rule" />
               {menuItem("Rotate 90", () => imageActions?.rotate(90))}
               {menuItem("Flip Horizontal", () => imageActions?.flip("h"))}
+              {adjustmentsEnabled && (
+                <>
+                  <div className="pf-menu-rule" />
+                  {ADJUSTMENT_MENU_ITEMS.map(item => adjustmentMenuItem(item))}
+                </>
+              )}
             </div>
           )}
         </div>
@@ -194,9 +228,16 @@ export default function EditorMenu({
               <button className="pf-mbtn" onClick={() => runMobileAction(handleLoad)}><FolderOpen size={12} /> Open</button>
               <button className="pf-mbtn" onClick={() => runMobileAction(handleSave)}>{canUseFileSave ? <Save size={12} /> : <Download size={12} />} {saveButtonLabel}</button>
               <button className={`pf-mbtn ${hasArtwork ? "primary" : ""}`} onClick={() => runMobileAction(handleOpenExport)}><Download size={12} /> Export</button>
+              {editActions?.canDeselect && <button className="pf-mbtn" onClick={() => runMobileAction(editActions.deselect)}>Deselect</button>}
               <button className="pf-mbtn" onClick={() => runMobileAction(handleQuickExport)}>Export Last</button>
               {imageActions && <button className="pf-mbtn" onClick={() => runMobileAction(imageActions.trim)}>Trim</button>}
               {editActions && <button className="pf-mbtn" onClick={() => runMobileAction(() => editActions.adjust("grayscale"))}>Grayscale</button>}
+              {adjustmentsEnabled && (
+                <>
+                  <button className="pf-mbtn" onClick={() => runMobileAction(() => adjustmentActions?.open("brightness"))}>Brightness</button>
+                  <button className="pf-mbtn" onClick={() => runMobileAction(() => adjustmentActions?.commit("invert"))}>Invert</button>
+                </>
+              )}
               {workspaceActions && <button className="pf-mbtn" onClick={() => runMobileAction(() => workspaceActions.toggle("showGrid"))}>Grid</button>}
               <button className="pf-mbtn" onClick={() => runMobileAction(openCommandPalette)}>Commands</button>
               <button className="pf-mbtn" onClick={() => runMobileAction(openHistoryPanel)}>History</button>
