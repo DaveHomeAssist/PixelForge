@@ -34,7 +34,7 @@ export default function AISettingsModal({ onClose, onSaved }) {
         </div>
         <div className="pf-modal-body">
           <p className="pf-field-help">
-            Keys are stored in this browser only, never uploaded or saved into project files.
+            Keys are stored in your browser's local storage. They are not included in saved project files.
           </p>
 
           <div className="pf-prop-row">

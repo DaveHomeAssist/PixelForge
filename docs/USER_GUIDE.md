@@ -2,7 +2,7 @@
 
 PixelForge is a browser-based drawing app that mixes raster painting with vector shapes on a single layered canvas. Paint with a brush, place shapes, drop in photos, type headlines, generate images with AI — then save a project file or export a PNG.
 
-No account. No upload. Everything stays in your browser.
+Open it in a browser and start drawing. Save a `.pforge` file or export a PNG.
 
 ---
 
@@ -343,7 +343,7 @@ Check that the active layer is **visible** (eye icon not crossed out) and has **
 The Brush works only on raster layers. Add one via **+ Raster** in the Layers section, or let PixelForge auto-switch by clicking the highlighted layer.
 
 **"AI Generate says 'Set your API keys'."**
-Open **✨ Generate → Settings** and paste both keys. They're kept in this browser only.
+Open **✨ Generate → Settings** and paste both keys. Keys are stored in your browser's local storage.
 
 **"AI generation failed."**
 - Check your key validity on the provider dashboard
