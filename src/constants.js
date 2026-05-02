@@ -21,12 +21,14 @@ export const HEX_COLOR_RE = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
 
 export const TIER2_FLAG_KEYS = [
   "adjustments",
+  "colorStack",
   "hslPicker",
   "gradient",
   "lasso",
   "multiSelect",
   "workspace",
   "pressure",
+  "serializationV2",
 ];
 
 const tier2PreviewDefaultOn = !!import.meta.env?.DEV &&

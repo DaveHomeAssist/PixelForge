@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
+import ColorPickerPopover from "./ColorPickerPopover.jsx";
 
 export default function SelectionSection({
   selectedShapeType,
@@ -9,9 +11,12 @@ export default function SelectionSection({
   duplicateSelectedShape,
   deleteSelectedShape,
   feedbackClass,
+  colorStackEnabled = false,
+  palettesApi,
   collapsed = false,
   onToggle,
 }) {
+  const [picker, setPicker] = useState(null);
   const isLine = selectedShapeType === "line" || selectedShapeType === "path";
   const makeInput = (field, label) => (
     <input
@@ -25,32 +30,51 @@ export default function SelectionSection({
       aria-label={label}
     />
   );
-  const makeColorRow = (field, enabledField, label) => (
-    <div className="pf-prop-row">
-      <label className="pf-checkbox-row">
-        <input
-          type="checkbox"
-          checked={!!selectedShapeFields?.[enabledField]}
-          onChange={e => {
-            beginSelectionFieldEdit();
-            handleSelectionFieldInput(enabledField, e.target.checked);
-            commitSelectionFieldEdits();
-          }}
-        />
-        <span>{label}</span>
-      </label>
-      <input
-        className="pf-color-inline"
-        type="color"
-        value={selectedShapeFields?.[field] || "#000000"}
-        disabled={!selectedShapeFields?.[enabledField]}
-        onFocus={beginSelectionFieldEdit}
-        onChange={e => handleSelectionFieldInput(field, e.target.value)}
-        onBlur={commitSelectionFieldEdits}
-        aria-label={`${label} color`}
-      />
-    </div>
-  );
+  const makeColorRow = (field, enabledField, label) => {
+    const enabled = !!selectedShapeFields?.[enabledField];
+    const color = selectedShapeFields?.[field] || "#000000";
+    return (
+      <div className="pf-prop-row">
+        <label className="pf-checkbox-row">
+          <input
+            type="checkbox"
+            checked={enabled}
+            onChange={e => {
+              beginSelectionFieldEdit();
+              handleSelectionFieldInput(enabledField, e.target.checked);
+              commitSelectionFieldEdits();
+            }}
+          />
+          <span>{label}</span>
+        </label>
+        {colorStackEnabled ? (
+          <button
+            className="pf-color-inline"
+            type="button"
+            disabled={!enabled}
+            style={{ background: color }}
+            aria-label={`${label} color picker`}
+            onClick={event => {
+              if (!enabled) return;
+              beginSelectionFieldEdit();
+              setPicker({ field, label, anchorRect: event.currentTarget.getBoundingClientRect() });
+            }}
+          />
+        ) : (
+          <input
+            className="pf-color-inline"
+            type="color"
+            value={color}
+            disabled={!enabled}
+            onFocus={beginSelectionFieldEdit}
+            onChange={e => handleSelectionFieldInput(field, e.target.value)}
+            onBlur={commitSelectionFieldEdits}
+            aria-label={`${label} color`}
+          />
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className={`pf-section ${feedbackClass("shape-edit")}`}>
@@ -84,6 +108,17 @@ export default function SelectionSection({
           <button className={`pf-layer-abtn ${feedbackClass("shape-duplicate")}`} onClick={duplicateSelectedShape}>Duplicate Shape</button>
           <button className={`pf-layer-abtn ${feedbackClass("shape-delete")}`} onClick={deleteSelectedShape}>Delete Shape</button>
         </div>
+        <ColorPickerPopover
+          open={!!picker}
+          value={selectedShapeFields?.[picker?.field] || "#000000"}
+          anchorRect={picker?.anchorRect}
+          palettesApi={palettesApi}
+          onChange={color => handleSelectionFieldInput(picker.field, color)}
+          onClose={() => {
+            commitSelectionFieldEdits();
+            setPicker(null);
+          }}
+        />
       </div>}
     </div>
   );

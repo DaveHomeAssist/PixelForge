@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { BRUSH_PRESETS } from "../brushes.js";
+import ColorPickerPopover from "./ColorPickerPopover.jsx";
 
 export default function ToolSettingsSection({
   panelToolCopy,
@@ -26,9 +28,22 @@ export default function ToolSettingsSection({
   setStrokeOn,
   strokeW,
   setStrokeW,
+  color1,
+  color2,
+  applyPrimaryColor,
+  applySecondaryColor,
+  colorStackEnabled = false,
+  palettesApi,
   collapsed = false,
   onToggle,
 }) {
+  const [picker, setPicker] = useState(null);
+  const pickerValue = picker?.which === 2 ? color2 : color1;
+  const applyPickerColor = (color) => {
+    if (picker?.which === 2) applySecondaryColor?.(color);
+    else applyPrimaryColor?.(color);
+  };
+
   return (
     <div className="pf-section">
       <button type="button" className="pf-section-head pf-section-toggle" onClick={onToggle} aria-expanded={!collapsed}>
@@ -114,6 +129,20 @@ export default function ToolSettingsSection({
                 <span style={{ fontSize: 10, color: "#6c7a84", minWidth: 28, textAlign: "right" }}>{Math.round(brushOpacity * 100)}%</span>
               </div>
             </div>
+            {colorStackEnabled && (
+              <div className="pf-prop-row">
+                <span className="pf-prop-label">Color</span>
+                <button
+                  className="pf-chip-btn"
+                  type="button"
+                  aria-label="Brush primary color picker"
+                  onClick={event => setPicker({ which: 1, anchorRect: event.currentTarget.getBoundingClientRect() })}
+                >
+                  <span className="pf-color-inline" style={{ background: color1, marginRight: 8 }} />
+                  Primary
+                </button>
+              </div>
+            )}
             <div className="pf-field-help">Brush opacity and size carry across both paint and erase modes.</div>
           </>
         )}
@@ -134,6 +163,14 @@ export default function ToolSettingsSection({
             <div className="pf-field-help">Primary color fills the shape. Secondary color is used for outlines when stroke is enabled.</div>
           </>
         )}
+        <ColorPickerPopover
+          open={!!picker}
+          value={pickerValue}
+          anchorRect={picker?.anchorRect}
+          onChange={applyPickerColor}
+          onClose={() => setPicker(null)}
+          palettesApi={palettesApi}
+        />
       </div>}
     </div>
   );

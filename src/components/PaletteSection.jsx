@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { SWATCHES } from "../constants.js";
+import ColorPickerPopover from "./ColorPickerPopover.jsx";
 
 export default function PaletteSection({
   recentColors,
@@ -14,9 +16,24 @@ export default function PaletteSection({
   commitColor,
   feedbackClass,
   fieldFeedbackClass,
+  colorStackEnabled = false,
+  palettesApi,
   collapsed = false,
   onToggle,
 }) {
+  const [picker, setPicker] = useState(null);
+  const openPicker = (which, event) => {
+    setPicker({
+      which,
+      anchorRect: event.currentTarget.getBoundingClientRect(),
+    });
+  };
+  const pickerValue = picker?.which === 2 ? color2 : color1;
+  const applyPickerColor = (color) => {
+    if (picker?.which === 2) applySecondaryColor(color);
+    else applyPrimaryColor(color);
+  };
+
   return (
     <div className="pf-section">
       <button type="button" className="pf-section-head pf-section-toggle" onClick={onToggle} aria-expanded={!collapsed}>
@@ -50,30 +67,65 @@ export default function PaletteSection({
             />
           ))}
         </div>
-        <div className="pf-hex-row">
-          <input
-            className={`pf-input ${fieldFeedbackClass("color1")}`}
-            style={{ flex: 1 }}
-            spellCheck={false}
-            value={color1Input}
-            onChange={e => setColor1Input(e.target.value)}
-            onBlur={() => commitColor(1, color1Input)}
-            onKeyDown={e => { if (e.key === "Enter") { commitColor(1, color1Input); e.currentTarget.blur(); } }}
-            title="Primary"
-            aria-label="Primary color hex value"
-          />
-          <input
-            className={`pf-input ${fieldFeedbackClass("color2")}`}
-            style={{ flex: 1 }}
-            spellCheck={false}
-            value={color2Input}
-            onChange={e => setColor2Input(e.target.value)}
-            onBlur={() => commitColor(2, color2Input)}
-            onKeyDown={e => { if (e.key === "Enter") { commitColor(2, color2Input); e.currentTarget.blur(); } }}
-            title="Secondary"
-            aria-label="Secondary color hex value"
-          />
-        </div>
+        {colorStackEnabled ? (
+          <div className="pf-hex-row">
+            <button
+              className={`pf-chip-btn ${feedbackClass("color-primary")}`}
+              type="button"
+              onClick={event => openPicker(1, event)}
+              aria-label="Primary color picker"
+              title="Primary"
+              style={{ flex: 1, justifyContent: "flex-start" }}
+            >
+              <span className="pf-color-inline" style={{ background: color1, marginRight: 8 }} />
+              Primary
+            </button>
+            <button
+              className={`pf-chip-btn ${feedbackClass("color-secondary")}`}
+              type="button"
+              onClick={event => openPicker(2, event)}
+              aria-label="Secondary color picker"
+              title="Secondary"
+              style={{ flex: 1, justifyContent: "flex-start" }}
+            >
+              <span className="pf-color-inline" style={{ background: color2, marginRight: 8 }} />
+              Secondary
+            </button>
+          </div>
+        ) : (
+          <div className="pf-hex-row">
+            <input
+              className={`pf-input ${fieldFeedbackClass("color1")}`}
+              style={{ flex: 1 }}
+              spellCheck={false}
+              value={color1Input}
+              onChange={e => setColor1Input(e.target.value)}
+              onBlur={() => commitColor(1, color1Input)}
+              onKeyDown={e => { if (e.key === "Enter") { commitColor(1, color1Input); e.currentTarget.blur(); } }}
+              title="Primary"
+              aria-label="Primary color hex value"
+            />
+            <input
+              className={`pf-input ${fieldFeedbackClass("color2")}`}
+              style={{ flex: 1 }}
+              spellCheck={false}
+              value={color2Input}
+              onChange={e => setColor2Input(e.target.value)}
+              onBlur={() => commitColor(2, color2Input)}
+              onKeyDown={e => { if (e.key === "Enter") { commitColor(2, color2Input); e.currentTarget.blur(); } }}
+              title="Secondary"
+              aria-label="Secondary color hex value"
+            />
+          </div>
+        )}
+        <ColorPickerPopover
+          open={!!picker}
+          value={pickerValue}
+          anchorRect={picker?.anchorRect}
+          onChange={applyPickerColor}
+          onClose={() => setPicker(null)}
+          palettesApi={palettesApi}
+        />
       </div>}
     </div>
   );

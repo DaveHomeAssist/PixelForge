@@ -23,6 +23,7 @@ import useAutosaveRecovery from "./hooks/useAutosaveRecovery.js";
 import useHistory from "./hooks/useHistory.js";
 import useLayerOps from "./hooks/useLayerOps.js";
 import useDocumentController from "./hooks/useDocumentController.js";
+import useColorPalettes from "./hooks/useColorPalettes.js";
 import useCanvasInteractions from "./hooks/useCanvasInteractions.js";
 import useEditorControls from "./hooks/useEditorControls.js";
 import useToolSelection from "./hooks/useToolSelection.js";
@@ -346,6 +347,8 @@ export default function PixelForge() {
     () => Object.values(prefs.uiPrefs.tier2Flags || {}).some(Boolean),
     [prefs.uiPrefs.tier2Flags],
   );
+  const colorStackEnabled = !!prefs.uiPrefs.tier2Flags?.colorStack;
+  const colorPalettes = useColorPalettes(prefs);
   const toggleWorkspacePref = useCallback((key) => {
     updatePrefs(prev => mergePrefs(prev, { uiPrefs: { [key]: !prev.uiPrefs[key] } }));
   }, [updatePrefs]);
@@ -1787,6 +1790,12 @@ export default function PixelForge() {
               setStrokeOn={setStrokeOn}
               strokeW={strokeW}
               setStrokeW={setStrokeW}
+              color1={color1}
+              color2={color2}
+              applyPrimaryColor={applyPrimaryColor}
+              applySecondaryColor={applySecondaryColor}
+              colorStackEnabled={colorStackEnabled}
+              palettesApi={colorPalettes}
               collapsed={isSectionCollapsed("tool")}
               onToggle={() => toggleSection("tool")}
             />
@@ -1802,6 +1811,8 @@ export default function PixelForge() {
               duplicateSelectedShape={duplicateSelectedShape}
               deleteSelectedShape={deleteSelectedShape}
               feedbackClass={feedbackClass}
+              colorStackEnabled={colorStackEnabled}
+              palettesApi={colorPalettes}
               collapsed={isSectionCollapsed("selection")}
               onToggle={() => toggleSection("selection")}
             />
@@ -1832,6 +1843,8 @@ export default function PixelForge() {
               commitColor={commitColor}
               feedbackClass={feedbackClass}
               fieldFeedbackClass={fieldFeedbackClass}
+              colorStackEnabled={colorStackEnabled}
+              palettesApi={colorPalettes}
               collapsed={isSectionCollapsed("palette")}
               onToggle={() => toggleSection("palette")}
             />

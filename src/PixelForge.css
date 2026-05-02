@@ -1576,6 +1576,65 @@
   .pf-modal-actions { flex-direction: column-reverse; }
 }
 
+.pf-color-picker-popover {
+  position: fixed;
+  z-index: 10020;
+  border: 1px solid var(--pf-line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 18px 54px rgba(32, 24, 16, 0.2);
+  padding: 12px;
+  overflow: auto;
+}
+
+.pf-color-picker-tabs,
+.pf-color-picker-save {
+  display: flex;
+  gap: 8px;
+}
+
+.pf-color-picker-tabs {
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.pf-color-picker-body,
+.pf-color-picker-tab-body,
+.pf-color-picker-palettes,
+.pf-color-picker-palette,
+.pf-color-picker-field {
+  display: grid;
+}
+
+.pf-color-picker-body {
+  gap: 10px;
+}
+
+.pf-color-picker-tab-body,
+.pf-color-picker-palettes {
+  gap: 8px;
+}
+
+.pf-color-picker-palette,
+.pf-color-picker-field {
+  gap: 5px;
+}
+
+.pf-color-picker-field {
+  font-size: 11px;
+  color: var(--pf-muted);
+}
+
+.pf-color-picker-sv {
+  height: 118px;
+  border-radius: 8px;
+  border: 1px solid var(--pf-line);
+}
+
+.pf-color-picker-hue {
+  background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pf *,
   .pf *::before,

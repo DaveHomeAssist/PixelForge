@@ -96,6 +96,54 @@ describe("buildProjectPayload + hydrateProject round-trip", () => {
     expect(hydrated.doc.order).toHaveLength(1);
     expect(hydrated.doc.layers.r1.type).toBe("raster");
   });
+
+  it("upcasts a v1 project with empty guides and view prefs when serialization v2 is enabled", async () => {
+    const legacy = {
+      v: 1,
+      w: 100,
+      h: 100,
+      aid: "r1",
+      layers: [
+        { id: "r1", name: "Bg", type: "raster", visible: true, opacity: 1, blend: "source-over", locked: false, ox: 0, oy: 0, data: "data:image/png;base64,AAAA" },
+      ],
+    };
+
+    const hydrated = await hydrateProject(legacy, { serializationV2: true });
+
+    expect(hydrated.version).toBe(2);
+    expect(hydrated.guides).toEqual({ x: [], y: [] });
+    expect(hydrated.viewPrefs).toEqual({});
+    expect(hydrated.doc.guides).toEqual({ x: [], y: [] });
+  });
+
+  it("keeps v1 project shape unchanged when serialization v2 is disabled", async () => {
+    const legacy = {
+      v: 1,
+      w: 100,
+      h: 100,
+      aid: "r1",
+      layers: [
+        { id: "r1", name: "Bg", type: "raster", visible: true, opacity: 1, blend: "source-over", locked: false, ox: 0, oy: 0, data: "data:image/png;base64,AAAA" },
+      ],
+    };
+
+    const hydrated = await hydrateProject(legacy, { serializationV2: false });
+
+    expect(hydrated.guides).toBeUndefined();
+    expect(hydrated.viewPrefs).toBeUndefined();
+    expect(hydrated.doc.guides).toBeUndefined();
+  });
+
+  it("keeps writer version unchanged and reads the current payload with v2 metadata", async () => {
+    const { doc, activeId } = createDefaultDocument(64, 64);
+    const payload = buildProjectPayload(doc, 64, 64, activeId, null);
+
+    expect(payload.v).toBe(3);
+    const hydrated = await hydrateProject(payload, { serializationV2: true });
+
+    expect(hydrated.guides).toEqual({ x: [], y: [] });
+    expect(hydrated.viewPrefs).toEqual({});
+  });
 });
 
 describe("buildDraftPayload + hydrateDraftPayload", () => {

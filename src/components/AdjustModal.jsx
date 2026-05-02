@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { applyImageEffect } from "../imageEffects.js";
+import { applyImageEffectAsync } from "../imageEffects.js";
 
 export const ADJUSTMENT_CONFIGS = {
   brightness: { title: "Brightness", min: -255, max: 255, step: 1, defaultAmount: 0 },
@@ -40,6 +40,7 @@ export default function AdjustModal({
   const previewRef = useRef(null);
   const frameRef = useRef(null);
   const abortRef = useRef(null);
+  const [committing, setCommitting] = useState(false);
 
   const renderPreview = useCallback((nextAmount) => {
     abortRef.current?.abort();
@@ -50,14 +51,19 @@ export default function AdjustModal({
     frameRef.current = requestFrame(() => {
       frameRef.current = null;
       if (!open || !sourceImageData || controller.signal.aborted) return;
-      const nextImageData = applyImageEffect(sourceImageData, kind, nextAmount, { signal: controller.signal });
-      if (controller.signal.aborted) return;
-      previewRef.current = nextImageData;
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      if (canvas.width !== sourceImageData.width) canvas.width = sourceImageData.width;
-      if (canvas.height !== sourceImageData.height) canvas.height = sourceImageData.height;
-      canvas.getContext("2d").putImageData(nextImageData, 0, 0);
+      applyImageEffectAsync(sourceImageData, kind, nextAmount, { signal: controller.signal })
+        .then(nextImageData => {
+          if (controller.signal.aborted) return;
+          previewRef.current = nextImageData;
+          const canvas = canvasRef.current;
+          if (!canvas) return;
+          if (canvas.width !== sourceImageData.width) canvas.width = sourceImageData.width;
+          if (canvas.height !== sourceImageData.height) canvas.height = sourceImageData.height;
+          canvas.getContext("2d").putImageData(nextImageData, 0, 0);
+        })
+        .catch(err => {
+          if (err?.name !== "AbortError") previewRef.current = null;
+        });
     });
   }, [kind, open, sourceImageData]);
 
@@ -75,8 +81,20 @@ export default function AdjustModal({
 
   const commit = () => {
     if (!sourceImageData) return;
-    const nextImageData = previewRef.current || applyImageEffect(sourceImageData, kind, amount);
-    onCommit(nextImageData);
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setCommitting(true);
+    applyImageEffectAsync(sourceImageData, kind, amount, { signal: controller.signal })
+      .then(nextImageData => {
+        if (!controller.signal.aborted) {
+          setCommitting(false);
+          onCommit(nextImageData);
+        }
+      })
+      .catch(err => {
+        if (err?.name !== "AbortError") setCommitting(false);
+      });
   };
 
   if (!open || !sourceImageData) return null;
@@ -112,7 +130,7 @@ export default function AdjustModal({
         </div>
         <div className="pf-modal-actions">
           <button className="pf-mbtn" type="button" onClick={onCancel}>Cancel</button>
-          <button className="pf-mbtn primary" type="button" onClick={commit}>OK</button>
+          <button className="pf-mbtn primary" type="button" onClick={commit} disabled={committing}>{committing ? "Working" : "OK"}</button>
         </div>
       </div>
     </div>

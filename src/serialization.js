@@ -128,13 +128,36 @@ export async function buildDraftPayload(editorDoc, docW, docH, activeId, selecte
   };
 }
 
-export async function hydrateProject(data) {
-  if (!data || !data.layers || (data.v !== 1 && data.v !== 2 && data.v !== 3)) throw new Error("Bad format");
-  const width = data.w || DEFAULT_W;
-  const height = data.h || DEFAULT_H;
-  const nextDoc = { layers: {}, order: [] };
+function normalizeProjectForRead(data, options = {}) {
+  if (!data || !data.layers) throw new Error("Bad format");
+  const version = data.v ?? (options.serializationV2 ? 1 : null);
+  if (version !== 1 && version !== 2 && version !== 3) throw new Error("Bad format");
+  if (!options.serializationV2) return { data, version, guides: null, viewPrefs: null };
+  return {
+    data: {
+      ...data,
+      v: Math.max(2, version),
+      guides: data.guides || { x: [], y: [] },
+      viewPrefs: data.viewPrefs || {},
+    },
+    version: Math.max(2, version),
+    guides: data.guides || { x: [], y: [] },
+    viewPrefs: data.viewPrefs || {},
+  };
+}
 
-  for (const rawLayer of data.layers) {
+export async function hydrateProject(data, options = {}) {
+  const normalized = normalizeProjectForRead(data, options);
+  const projectData = normalized.data;
+  const width = projectData.w || DEFAULT_W;
+  const height = projectData.h || DEFAULT_H;
+  const nextDoc = { layers: {}, order: [] };
+  if (options.serializationV2) {
+    nextDoc.guides = normalized.guides;
+    nextDoc.viewPrefs = normalized.viewPrefs;
+  }
+
+  for (const rawLayer of projectData.layers) {
     if (rawLayer.type === "raster") {
       const layer = {
         id: rawLayer.id || uid(),
@@ -217,8 +240,13 @@ export async function hydrateProject(data) {
     doc: nextDoc,
     docW: width,
     docH: height,
-    activeId: data.aid && nextDoc.layers[data.aid] ? data.aid : nextDoc.order[0],
-    selectedShape: data.selectedShape || null,
+    activeId: projectData.aid && nextDoc.layers[projectData.aid] ? projectData.aid : nextDoc.order[0],
+    selectedShape: projectData.selectedShape || null,
+    ...(options.serializationV2 ? {
+      version: normalized.version,
+      guides: normalized.guides,
+      viewPrefs: normalized.viewPrefs,
+    } : {}),
   };
 }
 

@@ -212,12 +212,16 @@ export default function useDocumentController({
     fileRef.current?.click();
   }, [fileRef, isDirty]);
 
+  const serializationV2Enabled = !!prefs.uiPrefs?.tier2Flags?.serializationV2;
+
   const onFileChange = useCallback(async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
     try {
       const text = await file.text();
-      const project = await hydrateProject(JSON.parse(text));
+      const project = await hydrateProject(JSON.parse(text), {
+        serializationV2: serializationV2Enabled,
+      });
       setModal(null);
       applyProjectState(project, { dirty: false, savedAt: Date.now() });
       triggerFeedback("load", "success");
@@ -227,7 +231,7 @@ export default function useDocumentController({
       flash("Load error: " + err.message, "error");
     }
     event.target.value = "";
-  }, [applyProjectState, flash, setModal, triggerFeedback]);
+  }, [applyProjectState, flash, serializationV2Enabled, setModal, triggerFeedback]);
 
   const handleImportImage = useCallback(() => {
     importRef.current?.click();
