@@ -28,6 +28,7 @@ import useCanvasInteractions from "./hooks/useCanvasInteractions.js";
 import useEditorControls from "./hooks/useEditorControls.js";
 import useToolSelection from "./hooks/useToolSelection.js";
 import useDerivedState from "./hooks/useDerivedState.js";
+import useKeyboardShortcuts from "./hooks/useKeyboardShortcuts.js";
 
 import {
   DEFAULT_W, DEFAULT_H, MIN_ZOOM, MAX_ZOOM,
@@ -793,25 +794,6 @@ export default function PixelForge() {
     prevToolRef.current = tool;
   }, [tool, selectionMask, capturePatchSnapshot, commitPatchHistory, selectedShape]);
 
-  /* ─── Undo / Redo ─── */
-  const handleUndo = useCallback(() => {
-    if (doUndo()) triggerFeedback("undo", "success", 140);
-  }, [doUndo, triggerFeedback]);
-
-  const handleRedo = useCallback(() => {
-    if (doRedo()) triggerFeedback("redo", "success", 140);
-  }, [doRedo, triggerFeedback]);
-
-  const zoomIn = useCallback(() => {
-    zoomAtViewportPoint(1.2);
-    triggerFeedback("zoom-in", "success", 140);
-  }, [triggerFeedback, zoomAtViewportPoint]);
-
-  const zoomOut = useCallback(() => {
-    zoomAtViewportPoint(1 / 1.2);
-    triggerFeedback("zoom-out", "success", 140);
-  }, [triggerFeedback, zoomAtViewportPoint]);
-
   const showBrushCursor = ["brush", "eraser"].includes(tool);
   const brushCursorSize = Math.max(1, brushSize * zoom);
   const brushCursorStyle = {
@@ -827,37 +809,6 @@ export default function PixelForge() {
     transform: "translateZ(0)",
     zIndex: 3,
   };
-
-  function duplicateShape(shape) {
-    if (shape.type === "line" || shape.type === "path") {
-      return {
-        ...cloneShape(shape),
-        id: uid(),
-        x1: shape.x1 + 12,
-        y1: shape.y1 + 12,
-        x2: shape.x2 + 12,
-        y2: shape.y2 + 12,
-      };
-    }
-    return {
-      ...cloneShape(shape),
-      id: uid(),
-      x: shape.x + 12,
-      y: shape.y + 12,
-    };
-  }
-
-  const duplicateSelectedShape = useCallback(() => {
-    const record = findShapeRecord();
-    if (!record || !canEditLayer(record.layer, "duplicate this shape")) return;
-    const before = capturePatchSnapshot([record.layer.id], true);
-    const nextShape = duplicateShape(record.shape);
-    record.layer.shapes.push(nextShape);
-    const nextSelection = { layerId: record.layer.id, shapeId: nextShape.id };
-    setSelectedShape(nextSelection);
-    commitPatchHistory(before, [record.layer.id], { selectedShape: nextSelection });
-    triggerFeedback("shape-duplicate", "success");
-  }, [canEditLayer, capturePatchSnapshot, commitPatchHistory, findShapeRecord, triggerFeedback]);
 
   const nudgeSelectedShape = useCallback((dx, dy) => {
     const record = findShapeRecord();
@@ -1034,16 +985,6 @@ export default function PixelForge() {
 
   const escapeMarquee = useCallback(() => deselectRasterSelection(), [deselectRasterSelection]);
 
-  const deleteSelectedShape = useCallback(() => {
-    const record = findShapeRecord();
-    if (!record || !canEditLayer(record.layer, "delete this shape")) return;
-    const before = capturePatchSnapshot([record.layer.id], true);
-    record.layer.shapes.splice(record.index, 1);
-    setSelectedShape(null);
-    commitPatchHistory(before, [record.layer.id], { selectedShape: null });
-    triggerFeedback("shape-delete", "success");
-  }, [canEditLayer, capturePatchSnapshot, commitPatchHistory, findShapeRecord, triggerFeedback]);
-
   const moveSelectedShapeOrder = useCallback((direction) => {
     const record = findShapeRecord();
     if (!record || !canEditLayer(record.layer, "reorder this shape")) return;
@@ -1074,6 +1015,58 @@ export default function PixelForge() {
       setSelectionMask(null);
     }
   }, [activeId, docH, docW]);
+
+  /* ─── Keyboard shortcuts ─── */
+  // Hook owns the keydown/keyup listeners + handleUndo/Redo + zoomIn/Out
+  // + duplicate/deleteSelectedShape. PR 2 will compute and pass `modalOpen`;
+  // for now we pass `false` so the interface is stable but the gate is dormant.
+  const {
+    handleUndo,
+    handleRedo,
+    zoomIn,
+    zoomOut,
+    duplicateSelectedShape,
+    deleteSelectedShape,
+  } = useKeyboardShortcuts({
+    selectedShape,
+    space,
+    selectionMask,
+    activeId,
+    tool,
+    isCompactUI,
+    modalOpen: false,
+    setBrushSize,
+    setPan,
+    setIsSpaceHeld,
+    setSelectedShape,
+    setCommandOpen,
+    setMobilePanelTab,
+    doUndo,
+    doRedo,
+    handleSave,
+    handleFitView,
+    zoomAtViewportPoint,
+    clearSelection,
+    duplicateActiveLayer,
+    selectTool,
+    swapColors,
+    copyMarquee,
+    cutMarquee,
+    deleteMarquee,
+    nudgeMarquee,
+    escapeMarquee,
+    deselectRasterSelection,
+    selectAllActive,
+    moveLayer,
+    nudgeSelectedShape,
+    findShapeRecord,
+    canEditLayer,
+    capturePatchSnapshot,
+    commitPatchHistory,
+    cloneShape,
+    uid,
+    triggerFeedback,
+  });
 
   const applyCanvasOperation = useCallback((operation, label) => {
     withFullHistory(() => {
@@ -1328,100 +1321,6 @@ export default function PixelForge() {
       { label: "Blur Effect", onClick: () => setLayerEffect(layerId, "blur") },
     ];
   }, [activeId, canMergeLayerDown, delLayer, duplicateLayer, flash, layers.length, mergeLayerDown, moveLayer, rasterizeLayer, setActiveId, setLayerEffect, toggleLayerFlag, toggleLock, toggleVis]);
-
-  /* ─── Keyboard ─── */
-  useEffect(() => {
-    const kd = (e) => {
-      const typing = isEditableTarget(e.target);
-      const key = e.key.toLowerCase();
-      if (e.code === "Space" && !typing) { space.current = true; setIsSpaceHeld(true); e.preventDefault(); }
-      if ((e.ctrlKey || e.metaKey) && (key === "=" || key === "+")) { e.preventDefault(); zoomIn(); return; }
-      if ((e.ctrlKey || e.metaKey) && key === "-") { e.preventDefault(); zoomOut(); return; }
-      if ((e.ctrlKey || e.metaKey) && key === "0") { e.preventDefault(); handleFitView(); return; }
-      if ((e.ctrlKey || e.metaKey) && key === "z") { e.preventDefault(); e.shiftKey ? handleRedo() : handleUndo(); return; }
-      if ((e.ctrlKey || e.metaKey) && key === "y") { e.preventDefault(); handleRedo(); return; }
-      if ((e.ctrlKey || e.metaKey) && key === "s") { e.preventDefault(); handleSave(); return; }
-      if ((e.ctrlKey || e.metaKey) && key === "k") { e.preventDefault(); setCommandOpen(true); return; }
-      if ((e.ctrlKey || e.metaKey) && key === "d" && !typing) {
-        e.preventDefault();
-        if (selectedShape) duplicateSelectedShape();
-        else duplicateActiveLayer();
-        return;
-      }
-      if ((e.ctrlKey || e.metaKey) && key === "j" && !typing) {
-        e.preventDefault();
-        if (selectedShape) duplicateSelectedShape();
-        else duplicateActiveLayer();
-        return;
-      }
-      if ((e.ctrlKey || e.metaKey) && key === "a" && !typing) {
-        e.preventDefault();
-        if (e.shiftKey) {
-          deselectRasterSelection();
-        } else {
-          selectAllActive();
-        }
-        return;
-      }
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "]") { e.preventDefault(); if (activeId) moveLayer(activeId, "top"); return; }
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "[") { e.preventDefault(); if (activeId) moveLayer(activeId, "bottom"); return; }
-      // Marquee clipboard ops (before paste — paste is handled by the document-level listener)
-      if (!typing && selectionMask) {
-        if ((e.ctrlKey || e.metaKey) && key === "c") {
-          e.preventDefault();
-          copyMarquee();
-          return;
-        }
-        if ((e.ctrlKey || e.metaKey) && key === "x") {
-          e.preventDefault();
-          cutMarquee();
-          return;
-        }
-      }
-      if (typing) return;
-      const sc = { v:"move", h:"hand", m:"marquee", a:"lasso", w:"magic", b:"brush", e:"eraser", g:"bucket", n:"gradient", r:"rect", o:"ellipse", p:"polygon", s:"star", l:"line", k:"pen", t:"text", i:"eyedropper" };
-      if (!e.ctrlKey && !e.metaKey && !e.altKey && sc[key]) selectTool(sc[key]);
-      if (!e.ctrlKey && !e.metaKey && !e.altKey && key === "x" && !selectionMask) swapColors();
-      if (e.key === "Escape") {
-        if (!escapeMarquee()) clearSelection();
-      }
-      if ((e.key === "Delete" || e.key === "Backspace")) {
-        if (selectionMask) {
-          e.preventDefault();
-          deleteMarquee();
-        } else if (selectedShape) {
-          e.preventDefault();
-          deleteSelectedShape();
-        }
-      }
-      if (selectionMask && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
-        e.preventDefault();
-        const step = e.shiftKey ? 10 : 1;
-        const dx = e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0;
-        const dy = e.key === "ArrowUp" ? -step : e.key === "ArrowDown" ? step : 0;
-        nudgeMarquee(dx, dy);
-      }
-      if (!selectionMask && selectedShape && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
-        e.preventDefault();
-        const step = e.shiftKey ? 10 : 1;
-        const dx = e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0;
-        const dy = e.key === "ArrowUp" ? -step : e.key === "ArrowDown" ? step : 0;
-        nudgeSelectedShape(dx, dy);
-      }
-      if (!selectionMask && !selectedShape && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
-        e.preventDefault();
-        const step = e.shiftKey ? 64 : 16;
-        const dx = e.key === "ArrowLeft" ? step : e.key === "ArrowRight" ? -step : 0;
-        const dy = e.key === "ArrowUp" ? step : e.key === "ArrowDown" ? -step : 0;
-        setPan(prev => ({ x: prev.x + dx, y: prev.y + dy }));
-      }
-      if (e.key === "[") setBrushSize(s => Math.max(1, s - 2));
-      if (e.key === "]") setBrushSize(s => Math.min(200, s + 2));
-    };
-    const ku = (e) => { if (e.code === "Space") { space.current = false; setIsSpaceHeld(false); } };
-    window.addEventListener("keydown", kd); window.addEventListener("keyup", ku);
-    return () => { window.removeEventListener("keydown", kd); window.removeEventListener("keyup", ku); };
-  }, [activeId, clearSelection, copyMarquee, cutMarquee, deleteMarquee, deleteSelectedShape, deselectRasterSelection, duplicateActiveLayer, duplicateSelectedShape, escapeMarquee, handleFitView, handleRedo, handleSave, handleUndo, moveLayer, nudgeMarquee, nudgeSelectedShape, selectAllActive, selectTool, selectedShape, selectionMask, swapColors, zoomIn, zoomOut]);
 
   function commitActiveLayerName() {
     if (!activeId) return;
