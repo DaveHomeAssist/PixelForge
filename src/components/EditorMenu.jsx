@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  Undo2, Redo2, Save, FolderOpen, Download, ZoomIn, ZoomOut, Maximize2, Menu, X, ChevronDown,
+  Undo2, Redo2, Save, FolderOpen, Download, ZoomIn, ZoomOut, Maximize2, Menu, X, ChevronDown, Sliders,
 } from "lucide-react";
 
 const ADJUSTMENT_MENU_ITEMS = [
@@ -38,6 +38,7 @@ export default function EditorMenu({
   workspaceActions,
   openCommandPalette,
   openHistoryPanel,
+  onOpenTweaks,
   doUndo,
   doRedo,
   toolMeta,
@@ -212,6 +213,16 @@ export default function EditorMenu({
         <button className={`pf-mbtn ${feedbackClass("zoom-out")}`} onClick={zoomOut} title="Zoom out"><ZoomOut size={12} /></button>
         <button className={`pf-mbtn ${feedbackClass("zoom-fit")}`} onClick={handleFitView} title="Fit document to view"><Maximize2 size={11} /> Fit</button>
         <button className="pf-mbtn" onClick={openCommandPalette} title="Command palette (Cmd/Ctrl+K)">Cmd</button>
+        {onOpenTweaks && (
+          <button
+            className="pf-mbtn pf-compact-icon"
+            onClick={onOpenTweaks}
+            title="Tweaks (Cmd/Ctrl+,)"
+            aria-label="Open Tweaks"
+          >
+            <Sliders size={12} />
+          </button>
+        )}
       </div>
       {mobileOpen && (
         <div className="pf-mobile-menu-backdrop" role="dialog" aria-modal="true" aria-label="Editor menu">

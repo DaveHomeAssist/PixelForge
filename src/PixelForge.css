@@ -1,28 +1,138 @@
-.pf {
-  --pf-bg: #f7f1e7;
-  --pf-bg-soft: #fcf8f1;
-  --pf-panel: rgba(255, 252, 246, 0.86);
-  --pf-panel-strong: rgba(255, 255, 255, 0.95);
-  --pf-line: #dfd3c4;
-  --pf-line-strong: #ccbda9;
-  --pf-text: #25343f;
-  --pf-muted: #6c7a84;
-  --pf-soft: #95a1a9;
-  --pf-accent: #2a6f97;
-  --pf-accent-strong: #194d6f;
-  --pf-accent-soft: rgba(42, 111, 151, 0.12);
-  --pf-highlight: #e8a84f;
-  --pf-shadow: 0 18px 50px rgba(96, 70, 34, 0.08);
+/* ─────────────────────────────────────────────────────────────────────────────
+ * PixelForge tokens
+ *
+ * PR 2 of the redesign cycle (2026-05-04): replaces the legacy .pf / .pf.pf-dark
+ * theme system with the new design's :root + [data-theme] attribute pattern.
+ *
+ * Defaults to the design's DARK theme on :root. [data-theme="light"] overrides.
+ * The .pf wrapper class no longer carries theme; it stays as the outer-element
+ * marker and is the host for legacy resets and font defaults.
+ *
+ * Motion tokens (--pf-dur-* and --pf-ease-*) are preserved verbatim per Q3 of
+ * the locked decisions; they are NOT part of the design's set but are required
+ * by every transition in this stylesheet.
+ *
+ * Radius default is 8px per Q8 (NOT the design's 10).
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+:root {
+  /* shape */
+  --pf-radius: 8px;
+  --pf-radius-sm: 4px;
+  --pf-radius-lg: 12px;
+  --pf-density: 1;
+
+  /* type */
+  --pf-font: "Geist", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --pf-font-mono: "Geist Mono", "JetBrains Mono", ui-monospace, monospace;
+
+  /* accent (default amber, can be overridden via [data-accent]) */
+  --pf-accent: oklch(0.78 0.16 70);
+  --pf-accent-fg: #1a0f00;
+  --pf-accent-soft: color-mix(in oklch, var(--pf-accent) 16%, transparent);
+  --pf-accent-line: color-mix(in oklch, var(--pf-accent) 28%, transparent);
+
+  /* dark surfaces (default theme) */
+  --pf-bg: #0e0f11;
+  --pf-bg-2: #16181b;
+  --pf-bg-3: #1c1f23;
+  --pf-panel: rgba(22, 24, 27, 0.78);
+  --pf-panel-solid: #16181b;
+  --pf-line: rgba(255, 255, 255, 0.07);
+  --pf-line-strong: rgba(255, 255, 255, 0.12);
+
+  /* text */
+  --pf-text: #e7e8ea;
+  --pf-text-2: #b6b9bf;
+  --pf-muted: #80858d;
+  --pf-faint: #555a62;
+
+  /* canvas */
+  --pf-canvas-bg: #0a0b0d;
+  --pf-canvas-paper: #f4f4f0;
+
+  /* shadow */
+  --pf-shadow-sm: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 1px 2px rgba(0, 0, 0, 0.3);
+  --pf-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  --pf-glow: 0 0 0 1px var(--pf-accent-line), 0 0 24px -4px var(--pf-accent-soft);
+
+  /* spacing scale (multiplied by density) */
+  --s-1: calc(2px * var(--pf-density));
+  --s-2: calc(4px * var(--pf-density));
+  --s-3: calc(6px * var(--pf-density));
+  --s-4: calc(8px * var(--pf-density));
+  --s-5: calc(10px * var(--pf-density));
+  --s-6: calc(12px * var(--pf-density));
+  --s-7: calc(16px * var(--pf-density));
+  --s-8: calc(20px * var(--pf-density));
+
+  /* structural */
+  --row: calc(28px * var(--pf-density));
+  --row-lg: calc(34px * var(--pf-density));
+  --topbar-h: calc(48px * var(--pf-density));
+  --statusbar-h: calc(28px * var(--pf-density));
+  --rail-w: calc(48px * var(--pf-density));
+  --right-w: 280px;
+
+  /* motion (preserved verbatim from legacy tokens per Q3) */
   --pf-dur-press: 120ms;
   --pf-dur-hover: 160ms;
   --pf-dur-feedback: 180ms;
   --pf-ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --pf-ease-press: cubic-bezier(0.2, 0.8, 0.2, 1);
   --pf-ease-snap: cubic-bezier(0.16, 1, 0.3, 1);
-  font-family: "IBM Plex Sans", "Avenir Next", "Segoe UI", system-ui, sans-serif;
-  background:
-    radial-gradient(circle at top left, rgba(255,255,255,0.9), transparent 32%),
-    linear-gradient(180deg, #fcf9f2 0%, #f3ebdf 100%);
+}
+
+[data-theme="light"] {
+  --pf-bg: #f6f6f4;
+  --pf-bg-2: #ffffff;
+  --pf-bg-3: #f0efeb;
+  --pf-panel: rgba(255, 255, 255, 0.85);
+  --pf-panel-solid: #ffffff;
+  --pf-line: rgba(0, 0, 0, 0.07);
+  --pf-line-strong: rgba(0, 0, 0, 0.13);
+  --pf-text: #14161a;
+  --pf-text-2: #3a3f46;
+  --pf-muted: #6c7178;
+  --pf-faint: #a8acb2;
+  --pf-canvas-bg: #ebeae5;
+  --pf-canvas-paper: #ffffff;
+  --pf-shadow-sm: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 1px 2px rgba(50, 40, 20, 0.06);
+  --pf-shadow: 0 14px 40px rgba(70, 55, 30, 0.12);
+}
+
+/* Accent presets (selected via [data-accent="..."] on the document root) */
+[data-accent="amber"]    { --pf-accent: oklch(0.78 0.16 70);  --pf-accent-fg: #1a0f00; }
+[data-accent="coral"]    { --pf-accent: oklch(0.72 0.18 28);  --pf-accent-fg: #20060a; }
+[data-accent="teal"]     { --pf-accent: oklch(0.72 0.13 220); --pf-accent-fg: #001016; }
+[data-accent="electric"] { --pf-accent: oklch(0.72 0.20 280); --pf-accent-fg: #0a0017; }
+[data-accent="lime"]     { --pf-accent: oklch(0.85 0.17 130); --pf-accent-fg: #0a1500; }
+[data-accent="mono"]     { --pf-accent: oklch(0.92 0 0);      --pf-accent-fg: #000; }
+
+/* Type presets (selected via [data-type="..."] on the document root) */
+[data-type="geist"] {
+  --pf-font: "Geist", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --pf-font-mono: "Geist Mono", "JetBrains Mono", ui-monospace, monospace;
+}
+[data-type="grotesk"] {
+  --pf-font: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --pf-font-mono: "JetBrains Mono", "Geist Mono", ui-monospace, monospace;
+}
+[data-type="editorial"] {
+  --pf-font: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --pf-font-mono: "JetBrains Mono", "Geist Mono", ui-monospace, monospace;
+}
+[data-type="editorial"] .pf-headline {
+  font-family: "Instrument Serif", Georgia, "Times New Roman", serif;
+}
+[data-type="mono"] {
+  --pf-font: "Geist Mono", "JetBrains Mono", ui-monospace, monospace;
+  --pf-font-mono: "Geist Mono", "JetBrains Mono", ui-monospace, monospace;
+}
+
+.pf {
+  font-family: var(--pf-font);
+  background: var(--pf-bg);
   color: var(--pf-text);
   user-select: none;
   display: flex;
@@ -30,38 +140,6 @@
   width: 100%;
   min-height: 100vh;
   position: relative;
-}
-.pf.pf-dark {
-  --pf-bg: #161b20;
-  --pf-bg-soft: #1f262c;
-  --pf-panel: rgba(28, 34, 40, 0.9);
-  --pf-panel-strong: rgba(34, 41, 48, 0.96);
-  --pf-line: #34404a;
-  --pf-line-strong: #46545f;
-  --pf-text: #edf3f7;
-  --pf-muted: #aab7c1;
-  --pf-soft: #7d8c98;
-  --pf-accent: #69b6d8;
-  --pf-accent-strong: #9ad7ef;
-  --pf-accent-soft: rgba(105, 182, 216, 0.16);
-  --pf-highlight: #f0b65b;
-  background: linear-gradient(180deg, #15191e 0%, #20262c 100%);
-}
-.pf.pf-dark .pf-menu,
-.pf.pf-dark .pf-rpanel,
-.pf.pf-dark .pf-toolbar,
-.pf.pf-dark .pf-modal,
-.pf.pf-dark .pf-mobile-menu-sheet {
-  background: linear-gradient(180deg, rgba(31,38,45,0.96), rgba(24,30,36,0.98));
-}
-.pf.pf-dark .pf-menu-popover {
-  border-color: rgba(70, 84, 95, 0.95);
-  background: rgba(28, 34, 40, 0.98);
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
-}
-.pf.pf-dark .pf-menu-item kbd {
-  border-color: rgba(70, 84, 95, 0.9);
-  background: rgba(18, 23, 28, 0.8);
 }
 .pf * { box-sizing: border-box; margin: 0; padding: 0; }
 .pf button, .pf input, .pf select { font: inherit; }
@@ -115,7 +193,7 @@
   font-size: 11px;
   letter-spacing: 0.28em;
   text-transform: uppercase;
-  color: var(--pf-accent-strong);
+  color: var(--pf-accent);
   padding: 7px 10px;
   border-radius: 999px;
   background: rgba(42, 111, 151, 0.08);
@@ -143,7 +221,7 @@
   transition: transform var(--pf-dur-hover) var(--pf-ease-standard), border-color var(--pf-dur-hover) var(--pf-ease-standard), background var(--pf-dur-hover) var(--pf-ease-standard), box-shadow var(--pf-dur-hover) var(--pf-ease-standard), color var(--pf-dur-hover) var(--pf-ease-standard);
 }
 .pf-mbtn:hover {
-  color: var(--pf-accent-strong);
+  color: var(--pf-accent);
   border-color: rgba(42, 111, 151, 0.2);
   background: rgba(255,255,255,0.98);
   box-shadow: 0 8px 20px rgba(128, 96, 52, 0.08);
@@ -151,14 +229,14 @@
 }
 .pf-mbtn:active {
   transform: scale(0.97);
-  color: var(--pf-accent-strong);
+  color: var(--pf-accent);
   background: rgba(240, 248, 252, 0.98);
   box-shadow: inset 0 0 0 1px rgba(42, 111, 151, 0.12);
 }
 .pf-mbtn.primary {
   background: linear-gradient(180deg, rgba(42, 111, 151, 0.16), rgba(42, 111, 151, 0.08));
   border-color: rgba(42, 111, 151, 0.2);
-  color: var(--pf-accent-strong);
+  color: var(--pf-accent);
 }
 .pf-mbtn.dis {
   opacity: 0.42;
@@ -192,7 +270,7 @@
 }
 .pf-menu-trigger:hover,
 .pf-menu-trigger.active {
-  color: var(--pf-accent-strong);
+  color: var(--pf-accent);
   border-color: rgba(42, 111, 151, 0.14);
   background: rgba(42, 111, 151, 0.08);
 }
@@ -226,7 +304,7 @@
 }
 .pf-menu-item:hover {
   background: rgba(42, 111, 151, 0.1);
-  color: var(--pf-accent-strong);
+  color: var(--pf-accent);
 }
 .pf-menu-item:disabled {
   opacity: 0.42;
@@ -279,7 +357,7 @@
   cursor: pointer;
 }
 .pf-menu-chip-button:hover {
-  color: var(--pf-accent-strong);
+  color: var(--pf-accent);
   border-color: rgba(42, 111, 151, 0.2);
   background: rgba(255,255,255,0.9);
 }
@@ -340,7 +418,7 @@
   justify-content: center;
 }
 .pf-menu-chip.accent {
-  color: var(--pf-accent-strong);
+  color: var(--pf-accent);
   border-color: rgba(42, 111, 151, 0.18);
   background: rgba(42, 111, 151, 0.1);
 }
@@ -381,7 +459,7 @@
   transform: translateY(-1px);
 }
 .pf-tbtn.active {
-  color: var(--pf-accent-strong);
+  color: var(--pf-accent);
   background: linear-gradient(180deg, rgba(42,111,151,0.18), rgba(255,255,255,0.96));
   border-color: rgba(42,111,151,0.2);
   box-shadow: 0 10px 26px rgba(42, 111, 151, 0.14);
@@ -397,7 +475,7 @@
   bottom: 6px;
   font-family: "IBM Plex Mono", "SFMono-Regular", "Menlo", monospace;
   font-size: 8px;
-  color: var(--pf-soft);
+  color: var(--pf-faint);
 }
 .pf-toolbar-sep {
   width: 34px;
@@ -471,7 +549,7 @@
   transition: all 0.15s ease;
 }
 .pf-swap-colors:hover {
-  color: var(--pf-accent-strong);
+  color: var(--pf-accent);
   border-color: rgba(42, 111, 151, 0.18);
   background: rgba(255,255,255,0.98);
 }
@@ -575,7 +653,7 @@
   margin-top: 8px;
   font-family: "IBM Plex Mono", "SFMono-Regular", "Menlo", monospace;
   font-size: 10px;
-  color: var(--pf-soft);
+  color: var(--pf-faint);
 }
 .pf-kbd {
   display: inline-flex;
@@ -587,7 +665,7 @@
   background: rgba(255,255,255,0.72);
   font-family: "IBM Plex Mono", "SFMono-Regular", "Menlo", monospace;
   font-size: 10px;
-  color: var(--pf-accent-strong);
+  color: var(--pf-accent);
   flex-shrink: 0;
 }
 .pf-field-help {
@@ -706,7 +784,7 @@
   transition: border-color var(--pf-dur-hover) var(--pf-ease-standard), background var(--pf-dur-hover) var(--pf-ease-standard), color var(--pf-dur-hover) var(--pf-ease-standard), transform var(--pf-dur-hover) var(--pf-ease-standard), box-shadow var(--pf-dur-hover) var(--pf-ease-standard);
 }
 .pf-chip-btn:hover {
-  color: var(--pf-accent-strong);
+  color: var(--pf-accent);
   border-color: rgba(42, 111, 151, 0.2);
   background: rgba(255,255,255,0.98);
   transform: translateY(-1px);
@@ -824,7 +902,7 @@
   transition: transform var(--pf-dur-hover) var(--pf-ease-standard), border-color var(--pf-dur-hover) var(--pf-ease-standard), background var(--pf-dur-hover) var(--pf-ease-standard), color var(--pf-dur-hover) var(--pf-ease-standard), box-shadow var(--pf-dur-hover) var(--pf-ease-standard);
 }
 .pf-layer-abtn:hover {
-  color: var(--pf-accent-strong);
+  color: var(--pf-accent);
   border-color: rgba(42, 111, 151, 0.16);
   background: rgba(255,255,255,0.98);
 }
@@ -913,7 +991,7 @@
   transition: transform var(--pf-dur-press) var(--pf-ease-press), border-color var(--pf-dur-hover) var(--pf-ease-standard), background var(--pf-dur-hover) var(--pf-ease-standard), color var(--pf-dur-hover) var(--pf-ease-standard), box-shadow var(--pf-dur-hover) var(--pf-ease-standard);
 }
 .pf-layer-vis:hover {
-  color: var(--pf-accent-strong);
+  color: var(--pf-accent);
   background: rgba(255,255,255,0.88);
   border-color: rgba(204, 189, 169, 0.7);
 }
@@ -956,7 +1034,7 @@
 }
 .pf-layer-tag {
   background: rgba(42,111,151,0.08);
-  color: var(--pf-accent-strong);
+  color: var(--pf-accent);
 }
 .pf-inline-actions {
   display: flex;
@@ -997,7 +1075,7 @@
   transition: transform var(--pf-dur-press) var(--pf-ease-press), border-color var(--pf-dur-hover) var(--pf-ease-standard), background var(--pf-dur-hover) var(--pf-ease-standard), color var(--pf-dur-hover) var(--pf-ease-standard), box-shadow var(--pf-dur-hover) var(--pf-ease-standard);
 }
 .pf-layer-lock:hover {
-  color: var(--pf-accent-strong);
+  color: var(--pf-accent);
   background: rgba(255,255,255,0.88);
   border-color: rgba(204, 189, 169, 0.7);
 }
@@ -1067,7 +1145,7 @@
 }
 .pf-command-item:hover {
   border-color: rgba(42,111,151,0.24);
-  color: var(--pf-accent-strong);
+  color: var(--pf-accent);
 }
 .pf-command-item:disabled {
   opacity: 0.45;
@@ -1089,7 +1167,7 @@
   padding: 14px;
   border-radius: 16px;
   border: 1px solid var(--pf-line);
-  background: var(--pf-panel-strong);
+  background: var(--pf-panel-solid);
   box-shadow: var(--pf-shadow);
 }
 .pf-floating-head,
@@ -1124,7 +1202,7 @@
 .pf-anchor-btn.active {
   border-color: rgba(42, 111, 151, 0.28);
   background: rgba(42, 111, 151, 0.1);
-  color: var(--pf-accent-strong);
+  color: var(--pf-accent);
 }
 .pf-anchor-btn {
   transition: transform var(--pf-dur-hover) var(--pf-ease-standard), border-color var(--pf-dur-hover) var(--pf-ease-standard), background var(--pf-dur-hover) var(--pf-ease-standard), color var(--pf-dur-hover) var(--pf-ease-standard), box-shadow var(--pf-dur-hover) var(--pf-ease-standard);
@@ -1181,13 +1259,13 @@
 .pf-mobile-tab.active {
   border-color: rgba(42, 111, 151, 0.2);
   background: rgba(42, 111, 151, 0.1);
-  color: var(--pf-accent-strong);
+  color: var(--pf-accent);
 }
 .pf-mobile-tab {
   transition: transform var(--pf-dur-hover) var(--pf-ease-standard), border-color var(--pf-dur-hover) var(--pf-ease-standard), background var(--pf-dur-hover) var(--pf-ease-standard), color var(--pf-dur-hover) var(--pf-ease-standard), box-shadow var(--pf-dur-hover) var(--pf-ease-standard);
 }
 .pf-mobile-tab:hover {
-  color: var(--pf-accent-strong);
+  color: var(--pf-accent);
   border-color: rgba(42, 111, 151, 0.18);
   background: rgba(255,255,255,0.92);
 }
@@ -1215,7 +1293,7 @@
   font-size: 10px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--pf-soft);
+  color: var(--pf-faint);
 }
 .pf-starter-title {
   margin-top: 8px;
@@ -1250,12 +1328,12 @@
   flex-shrink: 0;
   flex-wrap: wrap;
 }
-.pf-status-accent { color: var(--pf-accent-strong); }
+.pf-status-accent { color: var(--pf-accent); }
 .pf-status-badge {
   border: 1px solid rgba(42, 111, 151, 0.28);
   border-radius: 999px;
   background: rgba(42, 111, 151, 0.09);
-  color: var(--pf-accent-strong);
+  color: var(--pf-accent);
   padding: 2px 7px;
   font-weight: 700;
 }
@@ -1269,7 +1347,7 @@
   border-radius: 999px;
   border: 1px solid rgba(204, 189, 169, 0.84);
   background: rgba(255,255,255,0.82);
-  color: var(--pf-accent-strong);
+  color: var(--pf-accent);
   cursor: pointer;
   font-weight: 700;
 }
@@ -1362,7 +1440,7 @@
 .pf-context-item.active,
 .pf-context-item:hover {
   background: rgba(42, 111, 151, 0.1);
-  color: var(--pf-accent-strong);
+  color: var(--pf-accent);
 }
 .pf-context-item.danger {
   color: #9a4d38;
@@ -1640,6 +1718,234 @@
   .pf *::before,
   .pf *::after {
     transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Tweaks drawer (PR 2 of redesign cycle)
+ *
+ * Right-side slide-in drawer. Backdrop + drawer share fixed positioning.
+ * Tokens drive surface, line, text, radius, shadow.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+.pf-tweaks-root {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  pointer-events: none;
+}
+.pf-tweaks-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.32);
+  pointer-events: auto;
+  animation: pf-tweaks-fade var(--pf-dur-feedback) var(--pf-ease-standard);
+}
+.pf-tweaks-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(320px, 92vw);
+  background: var(--pf-panel-solid);
+  color: var(--pf-text);
+  border-left: 1px solid var(--pf-line-strong);
+  box-shadow: var(--pf-shadow);
+  display: flex;
+  flex-direction: column;
+  pointer-events: auto;
+  animation: pf-tweaks-slide var(--pf-dur-feedback) var(--pf-ease-snap);
+  font-family: var(--pf-font);
+  font-size: 12.5px;
+}
+@keyframes pf-tweaks-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes pf-tweaks-slide {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+.pf-tweaks-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--pf-line);
+}
+.pf-tweaks-title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--pf-text);
+}
+.pf-tweaks-close {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--pf-radius-sm);
+  color: var(--pf-muted);
+  transition: background-color var(--pf-dur-hover) var(--pf-ease-standard),
+              color var(--pf-dur-hover) var(--pf-ease-standard);
+}
+.pf-tweaks-close:hover {
+  background: var(--pf-bg-3);
+  color: var(--pf-text);
+}
+.pf-tweaks-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.pf-tweaks-foot {
+  border-top: 1px solid var(--pf-line);
+  padding: 10px 14px;
+  display: flex;
+  justify-content: flex-end;
+}
+.pf-tweaks-reset {
+  height: 26px;
+  padding: 0 12px;
+  border-radius: var(--pf-radius-sm);
+  font-size: 11.5px;
+  color: var(--pf-text-2);
+  border: 1px solid var(--pf-line-strong);
+  background: transparent;
+  transition: background-color var(--pf-dur-hover) var(--pf-ease-standard),
+              color var(--pf-dur-hover) var(--pf-ease-standard),
+              border-color var(--pf-dur-hover) var(--pf-ease-standard);
+}
+.pf-tweaks-reset:hover {
+  background: var(--pf-bg-3);
+  color: var(--pf-text);
+  border-color: var(--pf-line);
+}
+
+.pf-tweak-section + .pf-tweak-section {
+  padding-top: 4px;
+}
+.pf-tweak-section-title {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--pf-muted);
+  margin: 0 0 8px 0;
+}
+.pf-tweak-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pf-tweak-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pf-tweak-row-label {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--pf-text-2);
+}
+
+.pf-tweak-radio-group {
+  display: flex;
+  background: var(--pf-bg-3);
+  border-radius: var(--pf-radius-sm);
+  padding: 2px;
+  gap: 2px;
+}
+.pf-tweak-radio {
+  flex: 1;
+  height: 24px;
+  font-size: 11.5px;
+  color: var(--pf-text-2);
+  border-radius: calc(var(--pf-radius-sm) - 1px);
+  background: transparent;
+  transition: background-color var(--pf-dur-hover) var(--pf-ease-standard),
+              color var(--pf-dur-hover) var(--pf-ease-standard);
+  padding: 0 8px;
+}
+.pf-tweak-radio:hover { color: var(--pf-text); }
+.pf-tweak-radio.active {
+  background: var(--pf-panel-solid);
+  color: var(--pf-text);
+  box-shadow: var(--pf-shadow-sm);
+}
+
+.pf-tweak-select {
+  width: 100%;
+  height: 28px;
+  padding: 0 24px 0 8px;
+  border-radius: var(--pf-radius-sm);
+  border: 1px solid var(--pf-line-strong);
+  background: var(--pf-bg-3) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='%2380858d' d='M0 0h10L5 6z'/></svg>") no-repeat right 8px center;
+  color: var(--pf-text);
+  font-size: 11.5px;
+  appearance: none;
+  -webkit-appearance: none;
+  outline: none;
+  transition: border-color var(--pf-dur-hover) var(--pf-ease-standard);
+}
+.pf-tweak-select:hover { border-color: var(--pf-faint); }
+.pf-tweak-select:focus-visible {
+  border-color: var(--pf-accent);
+  outline: 2px solid var(--pf-accent-soft);
+  outline-offset: 1px;
+}
+
+.pf-tweak-slider-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.pf-tweak-slider-value {
+  font-family: var(--pf-font-mono);
+  font-size: 11px;
+  color: var(--pf-muted);
+  font-variant-numeric: tabular-nums;
+}
+.pf-tweak-slider {
+  width: 100%;
+  height: 4px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--pf-line-strong);
+  border-radius: 999px;
+  outline: none;
+  margin: 6px 0;
+}
+.pf-tweak-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--pf-accent);
+  border: 0;
+  box-shadow: 0 0 0 1px var(--pf-line-strong), 0 1px 3px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+}
+.pf-tweak-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--pf-accent);
+  border: 0;
+  box-shadow: 0 0 0 1px var(--pf-line-strong), 0 1px 3px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pf-tweaks-backdrop,
+  .pf-tweaks-drawer {
     animation: none !important;
   }
 }

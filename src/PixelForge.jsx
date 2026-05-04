@@ -18,6 +18,8 @@ import ExportModal from "./components/ExportModal.jsx";
 import CommandPalette from "./components/CommandPalette.jsx";
 import HistoryPanel from "./components/HistoryPanel.jsx";
 import AdjustModal from "./components/AdjustModal.jsx";
+import TweaksPanel from "./components/TweaksPanel.jsx";
+import useTweaks from "./hooks/useTweaks.js";
 import useEditorPrefs from "./hooks/useEditorPrefs.js";
 import useAutosaveRecovery from "./hooks/useAutosaveRecovery.js";
 import useHistory from "./hooks/useHistory.js";
@@ -105,6 +107,8 @@ export default function PixelForge() {
   const [adjustModal, setAdjustModal] = useState(null);
   const [clipboardStatus, setClipboardStatus] = useState(null);
   const [screenPoint, setScreenPoint] = useState({ x: 0, y: 0 });
+  const [tweaksOpen, setTweaksOpen] = useState(false);
+  const [tweaks, setTweak, resetTweaks] = useTweaks();
 
   /* ─── Refs ─── */
   const cvRef = useRef(null);
@@ -1040,6 +1044,7 @@ export default function PixelForge() {
     setIsSpaceHeld,
     setSelectedShape,
     setCommandOpen,
+    setTweaksOpen,
     setMobilePanelTab,
     doUndo,
     doRedo,
@@ -1449,7 +1454,7 @@ export default function PixelForge() {
      JSX
      ═══════════════════════════════════════════════════ */
   return (
-    <div className={`pf ${workspace.darkMode ? "pf-dark" : ""}`}>
+    <div className="pf">
       <input ref={fileRef} type="file" accept=".pforge,.json" style={{ display: "none" }} onChange={onFileChange} />
       <input ref={importRef} type="file" accept="image/*,.svg,image/svg+xml" style={{ display: "none" }} onChange={onImportImageChange} />
 
@@ -1488,6 +1493,7 @@ export default function PixelForge() {
         }}
         openCommandPalette={() => setCommandOpen(true)}
         openHistoryPanel={() => setHistoryOpen(true)}
+        onOpenTweaks={() => setTweaksOpen(true)}
         doUndo={handleUndo}
         doRedo={handleRedo}
         toolMeta={toolMeta}
@@ -1890,6 +1896,14 @@ export default function PixelForge() {
           onSaved={() => {}}
         />
       )}
+
+      <TweaksPanel
+        open={tweaksOpen}
+        onClose={() => setTweaksOpen(false)}
+        tweaks={tweaks}
+        setTweak={setTweak}
+        resetTweaks={resetTweaks}
+      />
     </div>
   );
 }

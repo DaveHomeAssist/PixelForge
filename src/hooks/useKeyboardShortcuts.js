@@ -28,6 +28,7 @@ export default function useKeyboardShortcuts({
   setIsSpaceHeld,
   setSelectedShape,
   setCommandOpen,
+  setTweaksOpen,
   setMobilePanelTab,
   // Callbacks from other hooks / modules
   doUndo,
@@ -137,6 +138,13 @@ export default function useKeyboardShortcuts({
       if ((e.ctrlKey || e.metaKey) && key === "y") { e.preventDefault(); handleRedo(); return; }
       if ((e.ctrlKey || e.metaKey) && key === "s") { e.preventDefault(); handleSave(); return; }
       if ((e.ctrlKey || e.metaKey) && key === "k") { e.preventDefault(); setCommandOpen(true); return; }
+      if ((e.ctrlKey || e.metaKey) && (key === "," || e.key === ",")) {
+        if (typeof setTweaksOpen === "function") {
+          e.preventDefault();
+          setTweaksOpen((o) => !o);
+          return;
+        }
+      }
       if ((e.ctrlKey || e.metaKey) && key === "d" && !typing) {
         e.preventDefault();
         if (selectedShape) duplicateSelectedShape();
@@ -221,7 +229,7 @@ export default function useKeyboardShortcuts({
     deselectRasterSelection, duplicateActiveLayer, duplicateSelectedShape, escapeMarquee,
     handleFitView, handleRedo, handleSave, handleUndo, moveLayer, nudgeMarquee,
     nudgeSelectedShape, selectAllActive, selectTool, selectedShape, selectionMask,
-    setBrushSize, setCommandOpen, setIsSpaceHeld, setPan, space, swapColors, zoomIn, zoomOut,
+    setBrushSize, setCommandOpen, setIsSpaceHeld, setPan, setTweaksOpen, space, swapColors, zoomIn, zoomOut,
   ]);
 
   return {
