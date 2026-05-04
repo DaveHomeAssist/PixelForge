@@ -1,4 +1,6 @@
+import { useRef } from "react";
 import { RESIZE_ANCHORS } from "../constants.js";
+import useFocusTrap from "../hooks/useFocusTrap.js";
 
 export default function ResizeDocumentModal({
   open,
@@ -8,13 +10,23 @@ export default function ResizeDocumentModal({
   closeModal,
   applyResizeCanvas,
 }) {
+  const containerRef = useRef(null);
+  useFocusTrap(open, containerRef, { restore: true, autoFocus: true, onEscape: closeModal });
+
   if (!open) return null;
 
   return (
     <div className="pf-modal-backdrop" onClick={closeModal}>
-      <div className="pf-modal" onClick={e => e.stopPropagation()}>
+      <div
+        ref={containerRef}
+        className="pf-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pf-resize-doc-title"
+        onClick={e => e.stopPropagation()}
+      >
         <div className="pf-modal-head">
-          <div className="pf-modal-title">Resize Canvas</div>
+          <div className="pf-modal-title" id="pf-resize-doc-title">Resize Canvas</div>
           <div className="pf-modal-copy">Resize the document and choose which anchor point stays fixed.</div>
         </div>
         <div className="pf-modal-body">

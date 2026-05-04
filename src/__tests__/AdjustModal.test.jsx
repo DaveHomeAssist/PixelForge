@@ -54,7 +54,7 @@ describe("AdjustModal", () => {
         />
       );
 
-      expect(screen.getByRole("dialog", { name: `${ADJUSTMENT_CONFIGS[kind].title} adjustment` })).toBeTruthy();
+      expect(screen.getByRole("dialog", { name: ADJUSTMENT_CONFIGS[kind].title })).toBeTruthy();
       expect(screen.getByRole("slider", { name: "Amount" })).toBeTruthy();
       unmount();
     }

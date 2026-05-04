@@ -1,12 +1,18 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { getApiConfig, setApiConfig, clearApiConfig } from "../ai/storage.js";
 import { listProviders, DEFAULT_PROVIDER_ID } from "../ai/providers/index.js";
+import useFocusTrap from "../hooks/useFocusTrap.js";
 
 export default function AISettingsModal({ onClose, onSaved }) {
   const initial = getApiConfig();
   const [anthropicKey, setAnthropicKey] = useState(initial.anthropicKey || "");
   const [providerId, setProviderId] = useState(initial.providerId || DEFAULT_PROVIDER_ID);
   const [providerKey, setProviderKey] = useState(initial.providerKey || "");
+  const containerRef = useRef(null);
+
+  // Mounted only while open (parent gates render); trap is active for the
+  // full lifetime of this component.
+  useFocusTrap(true, containerRef, { restore: true, autoFocus: true, onEscape: onClose });
 
   const save = () => {
     setApiConfig({
@@ -26,10 +32,18 @@ export default function AISettingsModal({ onClose, onSaved }) {
   };
 
   return (
-    <div className="pf-modal-backdrop" role="dialog" aria-modal="true" aria-label="AI settings">
-      <div className="pf-modal" style={{ maxWidth: 440 }}>
+    <div className="pf-modal-backdrop" onClick={onClose}>
+      <div
+        ref={containerRef}
+        className="pf-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pf-ai-settings-title"
+        style={{ maxWidth: 440 }}
+        onClick={e => e.stopPropagation()}
+      >
         <div className="pf-modal-head">
-          <div className="pf-modal-title">AI Settings</div>
+          <div className="pf-modal-title" id="pf-ai-settings-title">AI Settings</div>
           <button className="pf-icon-btn" onClick={onClose} aria-label="Close">×</button>
         </div>
         <div className="pf-modal-body">

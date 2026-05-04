@@ -1018,8 +1018,18 @@ export default function PixelForge() {
 
   /* ─── Keyboard shortcuts ─── */
   // Hook owns the keydown/keyup listeners + handleUndo/Redo + zoomIn/Out
-  // + duplicate/deleteSelectedShape. PR 2 will compute and pass `modalOpen`;
-  // for now we pass `false` so the interface is stable but the gate is dormant.
+  // + duplicate/deleteSelectedShape. `modalOpen` short-circuits bare-letter
+  // canvas shortcuts while any modal/popover is open so a key pressed inside
+  // the modal does not flip the canvas tool behind it.
+  const modalOpen = !!(
+    modal
+    || aiModal
+    || exportOpen
+    || commandOpen
+    || historyOpen
+    || adjustModal
+    || contextMenu
+  );
   const {
     handleUndo,
     handleRedo,
@@ -1034,7 +1044,7 @@ export default function PixelForge() {
     activeId,
     tool,
     isCompactUI,
-    modalOpen: false,
+    modalOpen,
     setBrushSize,
     setPan,
     setIsSpaceHeld,
@@ -1521,10 +1531,11 @@ export default function PixelForge() {
               onMouseEnter={() => setHoverToolId(t.id)}
               onMouseLeave={() => setHoverToolId(null)}
               title={`${t.label} (${t.shortcut})`}
+              aria-label={t.label}
               aria-pressed={tool === t.id}
             >
               <t.icon size={16} />
-              <span className="pf-shortcut">{t.shortcut}</span>
+              <span className="pf-shortcut" aria-hidden="true">{t.shortcut}</span>
             </button>
           ))}
           <div className="pf-toolbar-sep" />
@@ -1814,7 +1825,15 @@ export default function PixelForge() {
       />
 
       {/* ── Toast ── */}
-      {toast && <div className={`pf-toast ${toast.tone || "info"}`}>{toast.message}</div>}
+      {toast && (
+        <div
+          className={`pf-toast ${toast.tone || "info"}`}
+          role="status"
+          aria-live={toast.tone === "error" ? "assertive" : "polite"}
+        >
+          {toast.message}
+        </div>
+      )}
 
       {contextMenu && (
         <ContextMenu

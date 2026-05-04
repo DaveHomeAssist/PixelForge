@@ -1,3 +1,6 @@
+import { useRef } from "react";
+import useFocusTrap from "../hooks/useFocusTrap.js";
+
 export default function NewDocumentModal({
   open,
   docForm,
@@ -8,13 +11,23 @@ export default function NewDocumentModal({
   closeModal,
   applyNewDocument,
 }) {
+  const containerRef = useRef(null);
+  useFocusTrap(open, containerRef, { restore: true, autoFocus: true, onEscape: closeModal });
+
   if (!open) return null;
 
   return (
     <div className="pf-modal-backdrop" onClick={closeModal}>
-      <div className="pf-modal" onClick={e => e.stopPropagation()}>
+      <div
+        ref={containerRef}
+        className="pf-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pf-new-doc-title"
+        onClick={e => e.stopPropagation()}
+      >
         <div className="pf-modal-head">
-          <div className="pf-modal-title">New Document</div>
+          <div className="pf-modal-title" id="pf-new-doc-title">New Document</div>
           <div className="pf-modal-copy">Set the canvas size and initial background color for a fresh document.</div>
         </div>
         <div className="pf-modal-body">

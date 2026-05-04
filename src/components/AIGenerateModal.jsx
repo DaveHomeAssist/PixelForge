@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { hasAnthropicKey, hasProviderKey } from "../ai/storage.js";
+import useFocusTrap from "../hooks/useFocusTrap.js";
 
 export default function AIGenerateModal({
   onClose,
@@ -11,6 +12,11 @@ export default function AIGenerateModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const abortRef = useRef(null);
+  const containerRef = useRef(null);
+
+  // Mounted only while open (parent gates render); the focus trap is always
+  // active for the lifetime of this component.
+  useFocusTrap(true, containerRef, { restore: true, autoFocus: true, onEscape: onClose });
 
   // Abort any in-flight request on unmount (e.g., when the modal is closed).
   useEffect(() => () => { if (abortRef.current) abortRef.current.abort(); }, []);
@@ -52,17 +58,25 @@ export default function AIGenerateModal({
   };
 
   return (
-    <div className="pf-modal-backdrop" role="dialog" aria-modal="true" aria-label="Generate with AI">
-      <div className="pf-modal" style={{ maxWidth: 480 }}>
+    <div className="pf-modal-backdrop" onClick={onClose}>
+      <div
+        ref={containerRef}
+        className="pf-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pf-ai-generate-title"
+        style={{ maxWidth: 480 }}
+        onClick={e => e.stopPropagation()}
+      >
         <div className="pf-modal-head">
-          <div className="pf-modal-title">✨ Generate with AI</div>
+          <div className="pf-modal-title" id="pf-ai-generate-title">Generate with AI</div>
           <button className="pf-icon-btn" onClick={onClose} aria-label="Close">×</button>
         </div>
         <div className="pf-modal-body">
           <textarea
             value={prompt}
             onChange={e => setPrompt(e.target.value)}
-            placeholder="Describe the image you want…"
+            placeholder="Describe the image you want."
             rows={4}
             aria-label="Prompt"
             style={{ width: "100%", padding: 8 }}
@@ -85,7 +99,7 @@ export default function AIGenerateModal({
             </div>
           </div>
           {error && <div className="pf-field-help warn" role="alert">{error}</div>}
-          {busy && <div className="pf-field-help">Generating… this can take 10–60 seconds.</div>}
+          {busy && <div className="pf-field-help">Generating. This can take 10 to 60 seconds.</div>}
           <div className="pf-modal-actions" style={{ marginTop: 16, display: "flex", gap: 8, justifyContent: "flex-end" }}>
             <button type="button" className="pf-chip-btn" onClick={onOpenSettings} disabled={busy}>Settings</button>
             {busy ? (

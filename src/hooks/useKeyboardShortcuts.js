@@ -5,13 +5,13 @@ import { isEditableTarget, cloneShape as cloneShapeUtil } from "../utils.js";
  * useKeyboardShortcuts
  *
  * Owns the global keydown/keyup listeners and the related shape duplication /
- * deletion / undo+redo / zoom helpers. Extracted from PixelForge.jsx as a pure
- * refactor — no behavior change.
+ * deletion / undo+redo / zoom helpers.
  *
- * `modalOpen` is accepted for forward-compatibility with the modal a11y gate
- * planned in PR 2 of the Phase 1.5 cycle. It is intentionally unused inside
- * this hook for now; PR 2 wires the gate that suppresses bare-letter shortcuts
- * while a modal/popover is open.
+ * Modal gate: when `modalOpen` is truthy, bare-letter shortcuts (V, B, M, R,
+ * X, etc.) are suppressed so a key pressed inside a modal does not flip the
+ * canvas tool behind it. Modifier-driven shortcuts (Cmd/Ctrl/Alt) and Escape
+ * still flow so undo, redo, save, the command palette, and modal-close keep
+ * working. The gate sits at the very top of the keydown handler.
  */
 export default function useKeyboardShortcuts({
   // State reads
@@ -57,9 +57,9 @@ export default function useKeyboardShortcuts({
   uid,
   triggerFeedback,
 }) {
-  // Reserved for PR 2 (modal a11y gate) and future-spec wiring; referenced
-  // here so lint doesn't flag them while the interface is being stabilized.
-  void tool; void isCompactUI; void modalOpen; void setMobilePanelTab;
+  // Future-spec wiring kept on the signature; suppress lint here so renaming
+  // these later does not require an interface change.
+  void tool; void isCompactUI; void setMobilePanelTab;
 
   /* ─── Undo / Redo ─── */
   const handleUndo = useCallback(() => {
@@ -129,6 +129,14 @@ export default function useKeyboardShortcuts({
     const kd = (e) => {
       const typing = isEditableTarget(e.target);
       const key = e.key.toLowerCase();
+      // Modal gate: when any modal is open, suppress bare-letter tool
+      // shortcuts. Modifier-driven shortcuts (Cmd/Ctrl/Alt) and Escape
+      // continue to flow so undo, redo, save, command palette, and modal
+      // close still work.
+      const hasModifier = e.ctrlKey || e.metaKey || e.altKey;
+      if (modalOpen && !hasModifier && e.key !== "Escape") {
+        return;
+      }
       if (e.code === "Space" && !typing) { space.current = true; setIsSpaceHeld(true); e.preventDefault(); }
       if ((e.ctrlKey || e.metaKey) && (key === "=" || key === "+")) { e.preventDefault(); zoomIn(); return; }
       if ((e.ctrlKey || e.metaKey) && key === "-") { e.preventDefault(); zoomOut(); return; }
@@ -219,7 +227,7 @@ export default function useKeyboardShortcuts({
   }, [
     activeId, clearSelection, copyMarquee, cutMarquee, deleteMarquee, deleteSelectedShape,
     deselectRasterSelection, duplicateActiveLayer, duplicateSelectedShape, escapeMarquee,
-    handleFitView, handleRedo, handleSave, handleUndo, moveLayer, nudgeMarquee,
+    handleFitView, handleRedo, handleSave, handleUndo, modalOpen, moveLayer, nudgeMarquee,
     nudgeSelectedShape, selectAllActive, selectTool, selectedShape, selectionMask,
     setBrushSize, setCommandOpen, setIsSpaceHeld, setPan, space, swapColors, zoomIn, zoomOut,
   ]);

@@ -1,26 +1,32 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import useFocusTrap from "../hooks/useFocusTrap.js";
 
 export default function CommandPalette({ open, commands, onClose }) {
   const [query, setQuery] = useState("");
+  const containerRef = useRef(null);
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return commands;
     return commands.filter(command => `${command.label} ${command.group || ""}`.toLowerCase().includes(q));
   }, [commands, query]);
-  useEffect(() => {
-    if (!open) return undefined;
-    const handler = (event) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [onClose, open]);
+
+  // Focus trap owns Escape. The previous window-level Escape handler is
+  // dropped to avoid double-firing onClose with the trap's onEscape.
+  useFocusTrap(open, containerRef, { restore: true, autoFocus: true, onEscape: onClose });
+
   if (!open) return null;
   return (
-    <div className="pf-modal-backdrop" role="dialog" aria-modal="true" aria-label="Command palette">
-      <div className="pf-modal pf-command-modal">
+    <div className="pf-modal-backdrop" onClick={onClose}>
+      <div
+        ref={containerRef}
+        className="pf-modal pf-command-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pf-command-title"
+        onClick={e => e.stopPropagation()}
+      >
         <div className="pf-modal-head">
-          <div className="pf-modal-title">Command Palette</div>
+          <div className="pf-modal-title" id="pf-command-title">Command Palette</div>
           <div className="pf-modal-copy">Run editor tools, adjustments, filters, view options, and layer effects.</div>
         </div>
         <div className="pf-modal-body">

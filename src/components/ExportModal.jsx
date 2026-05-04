@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import useFocusTrap from "../hooks/useFocusTrap.js";
 
 export default function ExportModal({
   open,
@@ -15,6 +16,9 @@ export default function ExportModal({
   const [selectedOnly, setSelectedOnly] = useState(!!initialOptions?.selectedOnly && selectionAvailable);
   const [filename, setFilename] = useState(initialOptions?.filename || "pixelforge-export");
 
+  const containerRef = useRef(null);
+  useFocusTrap(open, containerRef, { restore: true, autoFocus: true, onEscape: onClose });
+
   if (!open) return null;
   const resolvedScale = scale === "custom" ? Number(customScale) || 1 : Number(scale);
   const submit = () => {
@@ -29,10 +33,18 @@ export default function ExportModal({
   };
 
   return (
-    <div className="pf-modal-backdrop" role="dialog" aria-modal="true" aria-label="Export options">
-      <div className="pf-modal" style={{ maxWidth: 480 }}>
+    <div className="pf-modal-backdrop" onClick={onClose}>
+      <div
+        ref={containerRef}
+        className="pf-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pf-export-title"
+        style={{ maxWidth: 480 }}
+        onClick={e => e.stopPropagation()}
+      >
         <div className="pf-modal-head">
-          <div className="pf-modal-title">Export</div>
+          <div className="pf-modal-title" id="pf-export-title">Export</div>
           <button className="pf-icon-btn" type="button" onClick={onClose} aria-label="Close export options">×</button>
         </div>
         <div className="pf-modal-body">

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { applyImageEffectAsync } from "../imageEffects.js";
+import useFocusTrap from "../hooks/useFocusTrap.js";
 
 export const ADJUSTMENT_CONFIGS = {
   brightness: { title: "Brightness", min: -255, max: 255, step: 1, defaultAmount: 0 },
@@ -40,7 +41,14 @@ export default function AdjustModal({
   const previewRef = useRef(null);
   const frameRef = useRef(null);
   const abortRef = useRef(null);
+  const containerRef = useRef(null);
   const [committing, setCommitting] = useState(false);
+
+  useFocusTrap(!!open && !!sourceImageData, containerRef, {
+    restore: true,
+    autoFocus: true,
+    onEscape: onCancel,
+  });
 
   const renderPreview = useCallback((nextAmount) => {
     abortRef.current?.abort();
@@ -100,10 +108,18 @@ export default function AdjustModal({
   if (!open || !sourceImageData) return null;
 
   return (
-    <div className="pf-modal-backdrop" role="dialog" aria-modal="true" aria-label={`${config.title} adjustment`}>
-      <div className="pf-modal" style={{ maxWidth: 480 }}>
+    <div className="pf-modal-backdrop" onClick={onCancel}>
+      <div
+        ref={containerRef}
+        className="pf-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pf-adjust-title"
+        style={{ maxWidth: 480 }}
+        onClick={e => e.stopPropagation()}
+      >
         <div className="pf-modal-head">
-          <div className="pf-modal-title">{config.title}</div>
+          <div className="pf-modal-title" id="pf-adjust-title">{config.title}</div>
         </div>
         <div className="pf-modal-body">
           <canvas
