@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo, useEffectEvent } from "react";
 import "./PixelForge.css";
 import EditorMenu from "./components/EditorMenu.jsx";
+import TopBar from "./components/TopBar.jsx";
 import SelectionSection from "./components/SelectionSection.jsx";
 import PaletteSection from "./components/PaletteSection.jsx";
 import LayersSection from "./components/LayersSection.jsx";
@@ -341,13 +342,15 @@ export default function PixelForge() {
   });
   const preferredRasterTool = getToolRequirement(prefs.toolPrefs.lastRasterTool) === "raster" ? prefs.toolPrefs.lastRasterTool : "brush";
   const preferredVectorTool = getToolRequirement(prefs.toolPrefs.lastVectorTool) === "vector" ? prefs.toolPrefs.lastVectorTool : "rect";
+  // PR 3 concern 5: dropped darkMode from this memo. Theme state moved to
+  // useTweaks (single source of truth). The legacy uiPrefs.darkMode key still
+  // sits in stored prefs for backward compatibility but is no longer read.
   const workspace = useMemo(() => ({
     showGrid: !!prefs.uiPrefs.showGrid,
     showRulers: !!prefs.uiPrefs.showRulers,
     snapToGrid: !!prefs.uiPrefs.snapToGrid,
     pixelPreview: !!prefs.uiPrefs.pixelPreview,
-    darkMode: !!prefs.uiPrefs.darkMode,
-  }), [prefs.uiPrefs.darkMode, prefs.uiPrefs.pixelPreview, prefs.uiPrefs.showGrid, prefs.uiPrefs.showRulers, prefs.uiPrefs.snapToGrid]);
+  }), [prefs.uiPrefs.pixelPreview, prefs.uiPrefs.showGrid, prefs.uiPrefs.showRulers, prefs.uiPrefs.snapToGrid]);
   const tier2PreviewActive = useMemo(
     () => Object.values(prefs.uiPrefs.tier2Flags || {}).some(Boolean),
     [prefs.uiPrefs.tier2Flags],
@@ -1423,6 +1426,69 @@ export default function PixelForge() {
     setStarterDismissed,
   });
 
+  // PR 3: TopBar menu items. Source of truth stays the existing EditorMenu
+  // shape. The TopBar dropdowns reuse the same callbacks; the structure here
+  // mirrors the legacy EditorMenu menus so behavior parity is preserved.
+  const adjustmentsEnabled = !!prefs?.uiPrefs?.tier2Flags?.adjustments;
+  const fileMenuItems = useMemo(() => [
+    { key: "new", label: "New Document", run: openNewDocument },
+    { key: "import", label: "Import Image", run: handleImportImage },
+    { key: "paste", label: "Paste Image", kbd: "Cmd V", run: pasteClipboard },
+    { key: "open", label: "Open Project", run: handleLoad },
+    "rule",
+    { key: "save", label: saveButtonLabel || "Save", run: handleSave },
+    { key: "export", label: "Export", run: () => setExportOpen(true) },
+    { key: "export-last", label: "Export Last", run: quickExport },
+    { key: "ai-generate", label: "Generate Image", run: () => setAiModal("generate") },
+  ], [handleImportImage, handleLoad, handleSave, openNewDocument, pasteClipboard, quickExport, saveButtonLabel]);
+
+  const editMenuItems = useMemo(() => [
+    { key: "undo", label: "Undo", kbd: "Cmd Z", disabled: undoN === 0, run: handleUndo },
+    { key: "redo", label: "Redo", kbd: "Shift Cmd Z", disabled: redoN === 0, run: handleRedo },
+    { key: "deselect", label: "Deselect", kbd: "Esc", disabled: !selectionMask, run: deselectRasterSelection },
+    "rule",
+    { key: "grayscale", label: "Grayscale", run: () => applyAdjustment("grayscale", 0, "grayscale applied") },
+    { key: "sharpen", label: "Sharpen", run: () => applyFilter("sharpen") },
+    { key: "blur", label: "Blur", run: () => applyFilter("blur") },
+  ], [applyAdjustment, applyFilter, deselectRasterSelection, handleRedo, handleUndo, redoN, selectionMask, undoN]);
+
+  const imageMenuItems = useMemo(() => {
+    const base = [
+      { key: "resize", label: "Resize Canvas", run: openResizeDocument },
+      { key: "crop", label: "Crop Selection", disabled: !selectionMask, run: cropSelection },
+      { key: "trim", label: "Trim Canvas", run: trimCanvas },
+      "rule",
+      { key: "rotate-90", label: "Rotate 90", run: () => rotateDocument(90) },
+      { key: "flip-h", label: "Flip Horizontal", run: () => flipDocument("h") },
+    ];
+    if (!adjustmentsEnabled) return base;
+    return [
+      ...base,
+      "rule",
+      { key: "adj-brightness", label: "Brightness…", run: () => openAdjustmentModal("brightness") },
+      { key: "adj-contrast", label: "Contrast…", run: () => openAdjustmentModal("contrast") },
+      { key: "adj-invert", label: "Invert", run: () => commitImmediateAdjustment("invert") },
+      { key: "adj-grayscale", label: "Grayscale", run: () => commitImmediateAdjustment("grayscale") },
+    ];
+  }, [adjustmentsEnabled, commitImmediateAdjustment, cropSelection, flipDocument, openAdjustmentModal, openResizeDocument, rotateDocument, selectionMask, trimCanvas]);
+
+  const viewMenuItems = useMemo(() => [
+    { key: "zoom-in", label: "Zoom In", kbd: "Cmd +", run: zoomIn },
+    { key: "zoom-out", label: "Zoom Out", kbd: "Cmd -", run: zoomOut },
+    { key: "fit", label: "Fit View", kbd: "Cmd 0", run: handleFitView },
+    "rule",
+    { key: "grid", label: workspace.showGrid ? "Hide Grid" : "Show Grid", run: () => toggleWorkspacePref("showGrid") },
+    { key: "rulers", label: workspace.showRulers ? "Hide Rulers" : "Show Rulers", run: () => toggleWorkspacePref("showRulers") },
+    { key: "snap", label: workspace.snapToGrid ? "Disable Snap" : "Enable Snap", run: () => toggleWorkspacePref("snapToGrid") },
+    { key: "command", label: "Command Palette", kbd: "Cmd K", run: () => setCommandOpen(true) },
+    { key: "history", label: "History Panel", run: () => setHistoryOpen(true) },
+  ], [handleFitView, toggleWorkspacePref, workspace.showGrid, workspace.showRulers, workspace.snapToGrid, zoomIn, zoomOut]);
+
+  const savedAtLabel = useMemo(() => {
+    if (!lastSavedAt) return null;
+    return new Date(lastSavedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  }, [lastSavedAt]);
+
   const commandItems = useMemo(() => [
     { id: "cmd-bright", label: "Brightness +18", group: "Adjustments", run: () => applyAdjustment("brightness", 18, "Brightness adjusted") },
     { id: "cmd-contrast", label: "Contrast +28", group: "Adjustments", run: () => applyAdjustment("contrast", 28, "Contrast adjusted") },
@@ -1438,7 +1504,9 @@ export default function PixelForge() {
     { id: "cmd-rulers", label: workspace.showRulers ? "Hide Rulers" : "Show Rulers", group: "View", run: () => toggleWorkspacePref("showRulers") },
     { id: "cmd-snap", label: workspace.snapToGrid ? "Disable Snap" : "Enable Snap", group: "View", run: () => toggleWorkspacePref("snapToGrid") },
     { id: "cmd-pixel", label: workspace.pixelPreview ? "Disable Pixel Preview" : "Enable Pixel Preview", group: "View", run: () => toggleWorkspacePref("pixelPreview") },
-    { id: "cmd-dark", label: workspace.darkMode ? "Light Mode" : "Dark Mode", group: "View", run: () => toggleWorkspacePref("darkMode") },
+    // PR 3 concern 2 fix: theme is now owned by useTweaks. Toggle the actual
+    // tweak rather than the dead uiPrefs.darkMode field.
+    { id: "cmd-dark", label: tweaks.theme === "dark" ? "Light Mode" : "Dark Mode", group: "View", run: () => setTweak("theme", tweaks.theme === "dark" ? "light" : "dark") },
     { id: "cmd-history", label: "Open History Panel", group: "Workspace", run: () => setHistoryOpen(true) },
     { id: "cmd-reference", label: "Add Reference Layer", group: "Workspace", run: makeReferenceLayer },
     { id: "cmd-deselect", label: "Deselect", group: "Edit", run: deselectRasterSelection, disabled: !selectionMask },
@@ -1448,7 +1516,7 @@ export default function PixelForge() {
     { id: "cmd-shadow", label: "Toggle Drop Shadow", group: "Layer Effects", run: () => setLayerEffect(activeId, "shadow"), disabled: !activeId },
     { id: "cmd-glow", label: "Toggle Glow", group: "Layer Effects", run: () => setLayerEffect(activeId, "glow"), disabled: !activeId },
     { id: "cmd-effect-blur", label: "Toggle Layer Blur", group: "Layer Effects", run: () => setLayerEffect(activeId, "blur"), disabled: !activeId },
-  ], [activeId, activeLayer, applyAdjustment, applyFilter, deselectRasterSelection, makeReferenceLayer, rasterizeLayer, selectionMask, setLayerEffect, toggleLayerFlag, toggleWorkspacePref, workspace.darkMode, workspace.pixelPreview, workspace.showGrid, workspace.showRulers, workspace.snapToGrid]);
+  ], [activeId, activeLayer, applyAdjustment, applyFilter, deselectRasterSelection, makeReferenceLayer, rasterizeLayer, selectionMask, setLayerEffect, setTweak, toggleLayerFlag, toggleWorkspacePref, tweaks.theme, workspace.pixelPreview, workspace.showGrid, workspace.showRulers, workspace.snapToGrid]);
 
   /* ═══════════════════════════════════════════════════
      JSX
@@ -1458,9 +1526,34 @@ export default function PixelForge() {
       <input ref={fileRef} type="file" accept=".pforge,.json" style={{ display: "none" }} onChange={onFileChange} />
       <input ref={importRef} type="file" accept="image/*,.svg,image/svg+xml" style={{ display: "none" }} onChange={onImportImageChange} />
 
-      {/* ── Menu Bar ── */}
+      {/* ── Top Bar (PR 3 redesign) ── */}
+      <TopBar
+        docName={activeLayer?.name || ""}
+        zoom={zoom}
+        setZoom={setZoom}
+        onZoomIn={zoomIn}
+        onZoomOut={zoomOut}
+        onZoomFit={handleFitView}
+        theme={tweaks.theme}
+        onToggleTheme={() => setTweak("theme", tweaks.theme === "dark" ? "light" : "dark")}
+        onOpenCommand={() => setCommandOpen(true)}
+        onOpenTweaks={() => setTweaksOpen(true)}
+        onSave={handleSave}
+        onExport={() => setExportOpen(true)}
+        isDirty={isDirty}
+        savedAt={savedAtLabel}
+        docW={docW}
+        docH={docH}
+        saveButtonLabel={saveButtonLabel}
+        saveButtonTitle={saveButtonTitle}
+        fileItems={fileMenuItems}
+        editItems={editMenuItems}
+        imageItems={imageMenuItems}
+        viewItems={viewMenuItems}
+      />
+
+      {/* ── Mobile menu sheet (preserved per plan section 9, decision 5) ── */}
       <EditorMenu
-        feedbackClass={feedbackClass}
         handleNewDocument={openNewDocument}
         handleImportImage={handleImportImage}
         handlePaste={pasteClipboard}
@@ -1493,24 +1586,12 @@ export default function PixelForge() {
         }}
         openCommandPalette={() => setCommandOpen(true)}
         openHistoryPanel={() => setHistoryOpen(true)}
-        onOpenTweaks={() => setTweaksOpen(true)}
         doUndo={handleUndo}
         doRedo={handleRedo}
-        toolMeta={toolMeta}
-        activeLayer={activeLayer}
-        docW={docW}
-        docH={docH}
-        isDirty={isDirty}
-        lastSavedAt={lastSavedAt}
         hasArtwork={hasArtwork}
         undoN={undoN}
         redoN={redoN}
-        zoom={zoom}
-        zoomIn={zoomIn}
-        zoomOut={zoomOut}
-        handleFitView={handleFitView}
         saveButtonLabel={saveButtonLabel}
-        saveButtonTitle={saveButtonTitle}
         canUseFileSave={canUseFileSave}
       />
 

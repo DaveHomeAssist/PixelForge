@@ -1,5 +1,14 @@
 import { useEffect, useState } from "react";
 
+/**
+ * StatusBar
+ *
+ * PR 3 visual refresh of the existing status bar. The render is replaced to
+ * match the design's grouped layout (active tool pill, dims, zoom, layer kind,
+ * save state, plus right-side keyboard hints) but every state input from the
+ * legacy version is preserved: docW/docH, zoom, activeLayer, toolMeta, isDirty,
+ * lastSavedAt, clipboardStatus, and the coarse-pointer help sheet.
+ */
 export default function StatusBar({
   docW,
   docH,
@@ -27,20 +36,41 @@ export default function StatusBar({
     return () => media.removeListener(sync);
   }, []);
 
+  const toolLabel = toolMeta?.label ? toolMeta.label.toUpperCase() : "—";
+  const layerKind = activeLayer?.type === "raster" ? "raster" : (activeLayer?.type ? "vector" : null);
+  const savedLabel = isDirty
+    ? "UNSAVED"
+    : lastSavedAt
+      ? `SAVED ${new Date(lastSavedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
+      : "READY";
+
   return (
-    <div className="pf-status">
+    <div className="pf-statusbar">
+      <span className="pf-pill pf-pill-live">{toolLabel}</span>
       <span>{docW} × {docH}</span>
-      <span className="pf-status-accent">{(zoom * 100).toFixed(0)}%</span>
-      {activeLayer && <span>{activeLayer.name} <span style={{ color: "#c8b9a8" }}>|</span> {activeLayer.type === "raster" ? "RASTER" : "VECTOR"}</span>}
-      <span>{toolMeta.label}</span>
-      {tier2PreviewActive && <span className="pf-status-badge">Tier 2 (preview)</span>}
-      {clipboardStatus && <span className="pf-status-accent">Clipboard {clipboardStatus}</span>}
-      <span>{isDirty ? "Unsaved draft" : lastSavedAt ? `Saved ${new Date(lastSavedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "Ready"}</span>
-      {isCoarsePointer ? (
-        <button className="pf-status-help" type="button" onClick={() => setHelpOpen(true)} aria-label="Open gesture help">?</button>
-      ) : (
-        <span className="pf-status-hints">Space drag pans · Scroll zooms · Cmd+V pastes · X swaps colors · [ ] resizes brush</span>
+      <span>{(zoom * 100).toFixed(0)}%</span>
+      {activeLayer && (
+        <span>{activeLayer.name} · {layerKind || ""}</span>
       )}
+      <span>{savedLabel}</span>
+      {tier2PreviewActive && <span className="pf-status-badge">Tier 2 (preview)</span>}
+      {clipboardStatus && (
+        <span className="pf-pill" role="status" aria-live="polite">{clipboardStatus}</span>
+      )}
+
+      <div className="pf-status-right">
+        {isCoarsePointer ? (
+          <button className="pf-status-help" type="button" onClick={() => setHelpOpen(true)} aria-label="Open gesture help">?</button>
+        ) : (
+          <>
+            <span className="pf-hint"><kbd>Space</kbd> drag pans</span>
+            <span className="pf-hint"><kbd>X</kbd> swap colors</span>
+            <span className="pf-hint"><kbd>[ ]</kbd> brush</span>
+            <span className="pf-hint"><kbd>⌘K</kbd> command</span>
+          </>
+        )}
+      </div>
+
       {helpOpen && (
         <div className="pf-help-sheet" role="dialog" aria-modal="true" aria-label="Canvas help">
           <div className="pf-help-card">

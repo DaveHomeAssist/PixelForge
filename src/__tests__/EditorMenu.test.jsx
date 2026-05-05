@@ -2,9 +2,16 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import EditorMenu from "../components/EditorMenu.jsx";
 
+/**
+ * EditorMenu tests
+ *
+ * As of PR 3 of the redesign cycle, EditorMenu only renders the mobile
+ * trigger and its slide-out sheet. Desktop dropdowns (File / Edit / Image /
+ * View) and Save / Export buttons moved to TopBar (see TopBar.test.jsx).
+ * These tests cover the surviving mobile-sheet surface.
+ */
 function renderMenu(overrides = {}) {
   const props = {
-    feedbackClass: () => "",
     handleNewDocument: vi.fn(),
     handleImportImage: vi.fn(),
     handlePaste: vi.fn(),
@@ -22,7 +29,7 @@ function renderMenu(overrides = {}) {
       flip: vi.fn(),
     },
     editActions: {
-      canDeselect: false,
+      canDeselect: true,
       deselect: vi.fn(),
       adjust: vi.fn(),
       filter: vi.fn(),
@@ -34,78 +41,53 @@ function renderMenu(overrides = {}) {
     openHistoryPanel: vi.fn(),
     doUndo: vi.fn(),
     doRedo: vi.fn(),
-    toolMeta: { label: "Brush" },
-    activeLayer: { name: "Layer 1" },
-    docW: 1200,
-    docH: 800,
-    isDirty: true,
-    lastSavedAt: null,
     hasArtwork: true,
     undoN: 1,
     redoN: 1,
-    zoom: 1,
-    zoomIn: vi.fn(),
-    zoomOut: vi.fn(),
-    handleFitView: vi.fn(),
     saveButtonLabel: "Save",
-    saveButtonTitle: "Save project",
     canUseFileSave: true,
     ...overrides,
   };
-
   render(<EditorMenu {...props} />);
   return props;
 }
 
-describe("EditorMenu", () => {
+describe("EditorMenu (mobile sheet)", () => {
   afterEach(() => cleanup());
 
-  it("groups file actions inside a dropdown menu", () => {
-    const props = renderMenu();
-
-    expect(screen.queryByRole("menu", { name: "File menu" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /file/i }));
-
-    expect(screen.getByRole("menu", { name: "File menu" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("menuitem", { name: /import image/i }));
-
-    expect(props.handleImportImage).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole("menu", { name: "File menu" })).toBeNull();
-  });
-
-  it("keeps secondary image and view actions available from menus", () => {
-    const props = renderMenu();
-
-    fireEvent.click(screen.getByRole("button", { name: /image/i }));
-    fireEvent.click(screen.getByRole("menuitem", { name: /rotate 90/i }));
-    expect(props.imageActions.rotate).toHaveBeenCalledWith(90);
-
-    fireEvent.click(screen.getByRole("button", { name: /view/i }));
-    fireEvent.click(screen.getByRole("menuitem", { name: /toggle grid/i }));
-    expect(props.workspaceActions.toggle).toHaveBeenCalledWith("showGrid");
-  });
-
-  it("exposes deselect when a selection is active", () => {
-    const props = renderMenu({
-      editActions: {
-        canDeselect: true,
-        deselect: vi.fn(),
-        adjust: vi.fn(),
-        filter: vi.fn(),
-      },
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: /edit/i }));
-    fireEvent.click(screen.getByRole("menuitem", { name: /deselect/i }));
-
-    expect(props.editActions.deselect).toHaveBeenCalledTimes(1);
-  });
-
-  it("disables deselect when no raster marquee is active", () => {
+  it("opens the mobile sheet when the menu trigger is clicked", () => {
     renderMenu();
+    expect(screen.queryByRole("dialog", { name: /editor menu/i })).toBeNull();
+    fireEvent.click(screen.getByLabelText(/open menu/i));
+    expect(screen.getByRole("dialog", { name: /editor menu/i })).toBeTruthy();
+  });
 
-    fireEvent.click(screen.getByRole("button", { name: /edit/i }));
+  it("invokes handleImportImage from the mobile sheet and closes it", () => {
+    const props = renderMenu();
+    fireEvent.click(screen.getByLabelText(/open menu/i));
+    fireEvent.click(screen.getByRole("button", { name: /^import$/i }));
+    expect(props.handleImportImage).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("dialog", { name: /editor menu/i })).toBeNull();
+  });
 
-    expect(screen.getByRole("menuitem", { name: /deselect/i }).disabled).toBe(true);
+  it("renders the Deselect button when a marquee is active", () => {
+    renderMenu();
+    fireEvent.click(screen.getByLabelText(/open menu/i));
+    expect(screen.getByRole("button", { name: /deselect/i })).toBeTruthy();
+  });
+
+  it("hides the Deselect button when no marquee is active", () => {
+    renderMenu({
+      editActions: { canDeselect: false, deselect: vi.fn(), adjust: vi.fn(), filter: vi.fn() },
+    });
+    fireEvent.click(screen.getByLabelText(/open menu/i));
+    expect(screen.queryByRole("button", { name: /deselect/i })).toBeNull();
+  });
+
+  it("toggles the grid via the workspace action shortcut", () => {
+    const props = renderMenu();
+    fireEvent.click(screen.getByLabelText(/open menu/i));
+    fireEvent.click(screen.getByRole("button", { name: /^grid$/i }));
+    expect(props.workspaceActions.toggle).toHaveBeenCalledWith("showGrid");
   });
 });
