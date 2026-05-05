@@ -11,7 +11,7 @@ import { useState, useEffect, useCallback } from "react";
  * Defaults are locked per plan section 9:
  *   - density: 1
  *   - radius:  8 (NOT the design's 10; preserves existing visual mass)
- *   - theme:   "dark"
+ *   - theme:   "light" (flipped from design's dark default for continuity with legacy users; users can flip via TweaksPanel)
  *   - accent:  "amber"
  *   - type:    "geist"
  *
@@ -21,7 +21,7 @@ import { useState, useEffect, useCallback } from "react";
 const STORAGE_KEY = "pf:tweaks:v1";
 
 const TWEAK_DEFAULTS = {
-  theme: "dark",
+  theme: "light",
   accent: "amber",
   type: "geist",
   density: 1,

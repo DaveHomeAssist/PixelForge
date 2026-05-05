@@ -23,7 +23,7 @@ describe("useTweaks", () => {
     const { result } = renderHook(() => useTweaks());
     const [tweaks] = result.current;
     expect(tweaks).toEqual(TWEAK_DEFAULTS);
-    expect(tweaks.theme).toBe("dark");
+    expect(tweaks.theme).toBe("light");
     expect(tweaks.accent).toBe("amber");
     expect(tweaks.type).toBe("geist");
     expect(tweaks.density).toBe(1);
@@ -40,7 +40,7 @@ describe("useTweaks", () => {
     expect(tweaks.accent).toBe("coral");
     expect(tweaks.radius).toBe(12);
     // Unspecified keys fall back to defaults.
-    expect(tweaks.theme).toBe("dark");
+    expect(tweaks.theme).toBe("light");
     expect(tweaks.density).toBe(1);
   });
 
@@ -63,7 +63,7 @@ describe("useTweaks", () => {
   it("applies data-theme, data-accent, data-type plus CSS custom properties to documentElement on mount", () => {
     renderHook(() => useTweaks());
     const root = document.documentElement;
-    expect(root.getAttribute("data-theme")).toBe("dark");
+    expect(root.getAttribute("data-theme")).toBe("light");
     expect(root.getAttribute("data-accent")).toBe("amber");
     expect(root.getAttribute("data-type")).toBe("geist");
     expect(root.style.getPropertyValue("--pf-density")).toBe("1");
