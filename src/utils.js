@@ -1,4 +1,4 @@
-import { TOOLS, HEX_COLOR_RE } from "./constants.js";
+import { TOOLS, HEX_COLOR_RE, PANEL_TAB_IDS } from "./constants.js";
 
 let _n = 0;
 export const uid = () => `${++_n}_${(Date.now() + Math.random()).toString(36)}`;
@@ -64,6 +64,12 @@ export function pushRecentPreset(list, preset, limit = 4) {
   const key = `${preset.width}x${preset.height}:${preset.background}`;
   const next = [preset, ...(list || []).filter(item => `${item.width}x${item.height}:${item.background}` !== key)];
   return next.slice(0, limit);
+}
+
+export function normalizePanelTab(tab) {
+  if (PANEL_TAB_IDS.includes(tab)) return tab;
+  if (tab === "selection" || tab === "palette") return "properties";
+  return "tool";
 }
 
 export function getToolRequirement(toolId) {

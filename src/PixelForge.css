@@ -1986,19 +1986,79 @@
 }
 
 .pf-panel-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   padding: 8px;
   gap: 6px;
   background: #111316;
   border-bottom: 1px solid var(--pf-line);
+  flex-shrink: 0;
 }
 
 .pf-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
   min-height: 30px;
+  padding: 0 6px;
+  gap: 4px;
   border: 1px solid var(--pf-line);
   border-radius: var(--pf-radius-sm);
   background: rgba(255, 255, 255, 0.03);
   color: var(--pf-muted);
+  font-size: 10px;
   font-weight: 650;
+  cursor: pointer;
+}
+
+.pf-tab-btn > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pf-tab-btn:hover {
+  border-color: rgba(var(--pf-accent-rgb), 0.42);
+  background: rgba(var(--pf-accent-rgb), 0.1);
+  color: var(--pf-accent-strong);
+}
+
+.pf-tab-btn:focus-visible {
+  outline: 2px solid rgba(var(--pf-accent-rgb), 0.72);
+  outline-offset: 2px;
+}
+
+.pf-tab-meta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--pf-muted);
+  font-family: var(--pf-font-mono);
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.pf-tab-btn.active .pf-tab-meta {
+  background: rgba(0, 0, 0, 0.18);
+  color: var(--pf-accent-fg);
+}
+
+.pf-panel-page {
+  min-height: 0;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.pf-history-stack {
+  display: grid;
+  gap: 8px;
 }
 
 .pf-section {

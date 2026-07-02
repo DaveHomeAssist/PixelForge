@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { TOOLS, TOOL_COPY, DEFAULT_PRIMARY, DEFAULT_SECONDARY } from "../constants.js";
-import { getToolRequirement } from "../utils.js";
+import { getToolRequirement, normalizePanelTab } from "../utils.js";
 import { getResizeCursor } from "../shapes.js";
 
 /**
@@ -20,7 +20,6 @@ export default function useDerivedState({
   selectedShape,
   selectionDraft,
   opacityDraft,
-  isCompactUI,
   isPanning,
   isSpaceHeld,
   hoverHandle,
@@ -197,33 +196,22 @@ export default function useDerivedState({
               : "default";
   const showNextSection = visibleNextActions.length > 0;
   const showStarterOverlay = isBlankDocument && prefs.behaviorPrefs.showStarterActions && !modal && !starterDismissed;
-  const showDesktopSection = (section) => !isCompactUI || mobilePanelTab === section;
+  const activePanelTab = normalizePanelTab(mobilePanelTab);
+  const showDesktopSection = (section) => activePanelTab === section;
 
   useEffect(() => {
-    if (!isCompactUI) return;
-    if (selectedShape) {
-      setMobilePanelTab("selection");
+    if (activePanelTab !== mobilePanelTab) {
+      setMobilePanelTab(activePanelTab);
       return;
     }
-    if (!toolCompatible && suggestedLayer) {
+    if (selectedShape && activePanelTab === "tool") {
+      setMobilePanelTab("properties");
+      return;
+    }
+    if (!toolCompatible && suggestedLayer && activePanelTab === "tool") {
       setMobilePanelTab("layers");
-      return;
     }
-    if (isBlankDocument) {
-      setMobilePanelTab("next");
-    }
-  }, [isBlankDocument, isCompactUI, selectedShape, suggestedLayer, toolCompatible, setMobilePanelTab]);
-
-  useEffect(() => {
-    if (!isCompactUI) return;
-    if (mobilePanelTab === "next" && !showNextSection) {
-      setMobilePanelTab(selectedShape ? "selection" : "tool");
-      return;
-    }
-    if (mobilePanelTab === "selection" && !selectedShape) {
-      setMobilePanelTab(showNextSection ? "next" : "tool");
-    }
-  }, [isCompactUI, mobilePanelTab, selectedShape, showNextSection, setMobilePanelTab]);
+  }, [activePanelTab, mobilePanelTab, selectedShape, suggestedLayer, toolCompatible, setMobilePanelTab]);
 
   useEffect(() => {
     if (!isBlankDocument) setStarterDismissed(false);

@@ -13,7 +13,7 @@ function makeProps(overrides = {}) {
     color1: "#2a6f97",
     color2: "#16324f",
     tool: "brush",
-    mobilePanelTab: "next",
+    mobilePanelTab: "tool",
     setBrushSize: vi.fn(),
     setBrushOpacity: vi.fn(),
     setStrokeW: vi.fn(),
@@ -96,7 +96,7 @@ describe("useEditorPrefs", () => {
       fillOn: false,
       color1: "#111111",
       color2: "#eeeeee",
-      mobilePanelTab: "palette",
+      mobilePanelTab: "properties",
     });
 
     const { rerender } = renderHook((hookProps) => useEditorPrefs(hookProps), {
@@ -109,7 +109,7 @@ describe("useEditorPrefs", () => {
       expect(persisted.toolPrefs.brushOpacity).toBe(0.6);
       expect(persisted.toolPrefs.strokeWidth).toBe(5);
       expect(persisted.toolPrefs.fillOn).toBe(false);
-      expect(persisted.uiPrefs.mobileTab).toBe("palette");
+      expect(persisted.uiPrefs.mobileTab).toBe("properties");
       expect(persisted.toolPrefs.recentColors.slice(0, 2)).toEqual(["#eeeeee", "#111111"]);
     });
 

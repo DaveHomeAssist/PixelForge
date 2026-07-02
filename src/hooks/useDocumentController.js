@@ -37,7 +37,6 @@ export default function useDocumentController({
     selectedShape,
     saveHandle,
     isDirty,
-    isCompactUI,
     docForm,
     resizeForm,
     recoveryDraft,
@@ -403,7 +402,7 @@ export default function useDocumentController({
         ),
       },
     }));
-    if (isCompactUI) setMobilePanelTab("next");
+    setMobilePanelTab("tool");
     triggerFeedback("new-doc", "success");
     flash("New document ready", "success");
   }, [
@@ -411,7 +410,6 @@ export default function useDocumentController({
     docRef,
     fitViewTo,
     flash,
-    isCompactUI,
     preferredRasterTool,
     renderCacheRef,
     setActiveId,

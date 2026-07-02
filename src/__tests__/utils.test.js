@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   clamp, dist, normalizeHexColor, mergePrefs, pushRecentValue,
-  pushRecentPreset, getToolRequirement, extractRegion, getAnchorOffset, reorderList,
+  pushRecentPreset, normalizePanelTab, getToolRequirement, extractRegion, getAnchorOffset, reorderList,
 } from "../utils.js";
 
 describe("clamp", () => {
@@ -48,6 +48,22 @@ describe("pushRecentPreset", () => {
     const list = [{ width: 100, height: 100, background: "#fff" }];
     const result = pushRecentPreset(list, { width: 100, height: 100, background: "#fff" }, 4);
     expect(result).toHaveLength(1);
+  });
+});
+
+describe("normalizePanelTab", () => {
+  it("keeps current side-panel tab ids", () => {
+    expect(normalizePanelTab("tool")).toBe("tool");
+    expect(normalizePanelTab("layers")).toBe("layers");
+    expect(normalizePanelTab("properties")).toBe("properties");
+    expect(normalizePanelTab("history")).toBe("history");
+  });
+
+  it("maps legacy side-panel tab ids", () => {
+    expect(normalizePanelTab("next")).toBe("tool");
+    expect(normalizePanelTab("selection")).toBe("properties");
+    expect(normalizePanelTab("palette")).toBe("properties");
+    expect(normalizePanelTab("unknown")).toBe("tool");
   });
 });
 

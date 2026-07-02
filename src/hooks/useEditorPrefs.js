@@ -3,7 +3,7 @@ import {
   DEFAULT_PREFS, DEFAULT_PRIMARY, DEFAULT_SECONDARY, DEFAULT_W, DEFAULT_H, DEFAULT_BG,
   PREFS_KEY, RECENT_COLORS_LIMIT, RECENT_SIZES_LIMIT,
 } from "../constants.js";
-import { mergePrefs, pushRecentValue } from "../utils.js";
+import { mergePrefs, normalizePanelTab, pushRecentValue } from "../utils.js";
 import { BRUSH_PRESETS } from "../brushes.js";
 
 const VALID_PRESET_IDS = new Set(BRUSH_PRESETS.map(p => p.id));
@@ -91,7 +91,7 @@ export default function useEditorPrefs({
       ...prev,
       anchor: p.docPrefs.lastResizeAnchor || "center",
     }));
-    setMobilePanelTab(p.uiPrefs.mobileTab || "next");
+    setMobilePanelTab(normalizePanelTab(p.uiPrefs.mobileTab));
     hydratedRef.current = true;
   }, [
     setBrushOpacity,
@@ -140,7 +140,7 @@ export default function useEditorPrefs({
           color1: loaded.toolPrefs.recentColors?.[0] ?? color1,
           color2: loaded.toolPrefs.recentColors?.[1] ?? color2,
           tool,
-          mobilePanelTab: loaded.uiPrefs.mobileTab ?? mobilePanelTab,
+          mobilePanelTab: normalizePanelTab(loaded.uiPrefs.mobileTab ?? mobilePanelTab),
           brushSizeTool: loadedBrushSize,
         };
         return;
@@ -199,8 +199,9 @@ export default function useEditorPrefs({
         }
       }
       // Mobile tab
-      if (current.uiPrefs.mobileTab !== mobilePanelTab) {
-        next = mergePrefs(next, { uiPrefs: { mobileTab: mobilePanelTab } });
+      const nextPanelTab = normalizePanelTab(mobilePanelTab);
+      if (current.uiPrefs.mobileTab !== nextPanelTab) {
+        next = mergePrefs(next, { uiPrefs: { mobileTab: nextPanelTab } });
       }
       return next;
     });

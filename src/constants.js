@@ -18,6 +18,7 @@ export const RECENT_COLORS_LIMIT = 8;
 export const RECENT_SIZES_LIMIT = 5;
 export const RECENT_PRESETS_LIMIT = 4;
 export const HEX_COLOR_RE = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
+export const PANEL_TAB_IDS = ["tool", "layers", "properties", "history"];
 
 export const TIER2_FLAG_KEYS = [
   "adjustments",
@@ -47,7 +48,7 @@ export const RESIZE_ANCHORS = [
 
 export const DEFAULT_PREFS = {
   uiPrefs: {
-    mobileTab: "next",
+    mobileTab: "tool",
     collapsedSections: {},
     tier2Flags: DEFAULT_TIER2_FLAGS,
     showGrid: false,

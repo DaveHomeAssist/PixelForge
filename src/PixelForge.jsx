@@ -17,6 +17,7 @@ import ContextMenu from "./components/ContextMenu.jsx";
 import ExportModal from "./components/ExportModal.jsx";
 import CommandPalette from "./components/CommandPalette.jsx";
 import HistoryPanel from "./components/HistoryPanel.jsx";
+import HistorySection from "./components/HistorySection.jsx";
 import AdjustModal from "./components/AdjustModal.jsx";
 import useEditorPrefs from "./hooks/useEditorPrefs.js";
 import useAutosaveRecovery from "./hooks/useAutosaveRecovery.js";
@@ -37,7 +38,7 @@ import {
 } from "./constants.js";
 import {
   uid, clamp, normalizeHexColor, isEditableTarget,
-  cloneShape, mergePrefs, getToolRequirement,
+  cloneShape, mergePrefs, getToolRequirement, normalizePanelTab,
 } from "./utils.js";
 import { renderEditor } from "./render.js";
 import { commitFloat } from "./marquee.js";
@@ -80,7 +81,7 @@ export default function PixelForge() {
   const [resizeForm, setResizeForm] = useState({ width: DEFAULT_W, height: DEFAULT_H, anchor: "center" });
   const [layerNameInput, setLayerNameInput] = useState("");
   const [dragLayerId, setDragLayerId] = useState(null);
-  const [mobilePanelTab, setMobilePanelTab] = useState("next");
+  const [mobilePanelTab, setMobilePanelTab] = useState("tool");
   const [isCompactUI, setIsCompactUI] = useState(false);
   const [starterDismissed, setStarterDismissed] = useState(false);
   const [feedbackState, setFeedbackState] = useState({ scope: null, tone: "idle" });
@@ -1273,8 +1274,8 @@ export default function PixelForge() {
 
   const viewportContextItems = useCallback((shapeSelection = selectedShape) => [
     ...(shapeSelection ? [
-      { label: "Edit Fill", onClick: () => setMobilePanelTab("selection") },
-      { label: "Edit Stroke", onClick: () => setMobilePanelTab("selection") },
+      { label: "Edit Fill", onClick: () => setMobilePanelTab("properties") },
+      { label: "Edit Stroke", onClick: () => setMobilePanelTab("properties") },
       { separator: true },
       { label: "Bring Forward", onClick: () => moveSelectedShapeOrder(1) },
       { label: "Send Backward", onClick: () => moveSelectedShapeOrder(-1) },
@@ -1403,7 +1404,6 @@ export default function PixelForge() {
     selectedShape,
     selectionDraft,
     opacityDraft,
-    isCompactUI,
     isPanning,
     isSpaceHeld,
     hoverHandle,
@@ -1454,6 +1454,14 @@ export default function PixelForge() {
     { id: "cmd-glow", label: "Toggle Glow", group: "Layer Effects", run: () => setLayerEffect(activeId, "glow"), disabled: !activeId },
     { id: "cmd-effect-blur", label: "Toggle Layer Blur", group: "Layer Effects", run: () => setLayerEffect(activeId, "blur"), disabled: !activeId },
   ], [activeId, activeLayer, applyAdjustment, applyFilter, deselectRasterSelection, makeReferenceLayer, rasterizeLayer, selectionMask, setLayerEffect, toggleLayerFlag, toggleWorkspacePref, workspace.darkMode, workspace.pixelPreview, workspace.showGrid, workspace.showRulers, workspace.snapToGrid]);
+
+  const rightPanelTab = normalizePanelTab(mobilePanelTab);
+  const rightPanelTabs = [
+    { id: "tool", label: "Tool", meta: showNextSection ? visibleNextActions.length : null },
+    { id: "layers", label: "Layers", meta: layers.length },
+    { id: "properties", label: "Properties", meta: selectedShape ? "SEL" : activeLayer?.type === "text" ? "TXT" : null },
+    { id: "history", label: "History", meta: undoN || redoN ? `${undoN}/${redoN}` : null },
+  ];
 
   /* ═══════════════════════════════════════════════════
      JSX
@@ -1649,165 +1657,211 @@ export default function PixelForge() {
             discardRecoveredDraft={discardRecoveredDraft}
           />
 
-          <div className="pf-mobile-tabs">
-            {showNextSection && <button className={`pf-mobile-tab ${mobilePanelTab === "next" ? "active" : ""}`} onClick={() => setMobilePanelTab("next")}>Next</button>}
-            <button className={`pf-mobile-tab ${mobilePanelTab === "tool" ? "active" : ""}`} onClick={() => setMobilePanelTab("tool")}>Tool</button>
-            {selectedShape && <button className={`pf-mobile-tab ${mobilePanelTab === "selection" ? "active" : ""}`} onClick={() => setMobilePanelTab("selection")}>Selection</button>}
-            <button className={`pf-mobile-tab ${mobilePanelTab === "palette" ? "active" : ""}`} onClick={() => setMobilePanelTab("palette")}>Colors</button>
-            <button className={`pf-mobile-tab ${mobilePanelTab === "layers" ? "active" : ""}`} onClick={() => setMobilePanelTab("layers")}>Layers</button>
+          <div className="pf-panel-tabs" role="tablist" aria-label="Editor side panel">
+            {rightPanelTabs.map(tab => (
+              <button
+                key={tab.id}
+                id={`pf-panel-tab-${tab.id}`}
+                className={`pf-tab-btn ${rightPanelTab === tab.id ? "active" : ""}`}
+                type="button"
+                role="tab"
+                aria-selected={rightPanelTab === tab.id}
+                aria-controls={`pf-panel-${tab.id}`}
+                onClick={() => setMobilePanelTab(tab.id)}
+              >
+                <span>{tab.label}</span>
+                {tab.meta !== null && tab.meta !== undefined && <span className="pf-tab-meta">{tab.meta}</span>}
+              </button>
+            ))}
           </div>
 
-          {showNextSection && showDesktopSection("next") && (
-            <div className="pf-section">
-              <div className="pf-section-head">Suggested Next</div>
-              <div className="pf-section-body">
-                <div className="pf-next-grid">
-                  {visibleNextActions.map(action => (
-                    <button key={action.key} className="pf-next-card" onClick={action.onClick}>
-                      <div className="pf-next-title">{action.label}</div>
-                      <div className="pf-next-detail">{action.detail}</div>
-                    </button>
-                  ))}
+          {showDesktopSection("tool") && (
+            <div
+              id="pf-panel-tool"
+              className="pf-panel-page"
+              role="tabpanel"
+              aria-labelledby="pf-panel-tab-tool"
+            >
+              {showNextSection && (
+                <div className="pf-section">
+                  <div className="pf-section-head">Suggested Next</div>
+                  <div className="pf-section-body">
+                    <div className="pf-next-grid">
+                      {visibleNextActions.map(action => (
+                        <button key={action.key} className="pf-next-card" onClick={action.onClick}>
+                          <div className="pf-next-title">{action.label}</div>
+                          <div className="pf-next-detail">{action.detail}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
+
+              <ToolSettingsSection
+                panelToolCopy={panelToolCopy}
+                panelToolMeta={panelToolMeta}
+                hoverToolMeta={hoverToolMeta}
+                tool={tool}
+                toolMeta={toolMeta}
+                activeLayer={activeLayer}
+                toolCompatible={toolCompatible}
+                suggestedLayer={suggestedLayer}
+                focusLayerId={focusLayerId}
+                recentBrushSizes={recentBrushSizes}
+                setBrushSize={setBrushSize}
+                brushSize={brushSize}
+                brushOpacity={brushOpacity}
+                setBrushOpacity={setBrushOpacity}
+                brushPreset={brushPreset}
+                setBrushPreset={setBrushPreset}
+                bucketTolerance={bucketTolerance}
+                setBucketTolerance={setBucketTolerance}
+                fillOn={fillOn}
+                setFillOn={setFillOn}
+                strokeOn={strokeOn}
+                setStrokeOn={setStrokeOn}
+                strokeW={strokeW}
+                setStrokeW={setStrokeW}
+                color1={color1}
+                color2={color2}
+                applyPrimaryColor={applyPrimaryColor}
+                applySecondaryColor={applySecondaryColor}
+                colorStackEnabled={colorStackEnabled}
+                palettesApi={colorPalettes}
+                collapsed={isSectionCollapsed("tool")}
+                onToggle={() => toggleSection("tool")}
+              />
             </div>
           )}
 
-          {/* Properties */}
-          {showDesktopSection("tool") && (
-            <ToolSettingsSection
-              panelToolCopy={panelToolCopy}
-              panelToolMeta={panelToolMeta}
-              hoverToolMeta={hoverToolMeta}
-              tool={tool}
-              toolMeta={toolMeta}
-              activeLayer={activeLayer}
-              toolCompatible={toolCompatible}
-              suggestedLayer={suggestedLayer}
-              focusLayerId={focusLayerId}
-              recentBrushSizes={recentBrushSizes}
-              setBrushSize={setBrushSize}
-              brushSize={brushSize}
-              brushOpacity={brushOpacity}
-              setBrushOpacity={setBrushOpacity}
-              brushPreset={brushPreset}
-              setBrushPreset={setBrushPreset}
-              bucketTolerance={bucketTolerance}
-              setBucketTolerance={setBucketTolerance}
-              fillOn={fillOn}
-              setFillOn={setFillOn}
-              strokeOn={strokeOn}
-              setStrokeOn={setStrokeOn}
-              strokeW={strokeW}
-              setStrokeW={setStrokeW}
-              color1={color1}
-              color2={color2}
-              applyPrimaryColor={applyPrimaryColor}
-              applySecondaryColor={applySecondaryColor}
-              colorStackEnabled={colorStackEnabled}
-              palettesApi={colorPalettes}
-              collapsed={isSectionCollapsed("tool")}
-              onToggle={() => toggleSection("tool")}
-            />
-          )}
-
-          {selectedShape && selectedShapeType && showDesktopSection("selection") && (
-            <SelectionSection
-              selectedShapeType={selectedShapeType}
-              selectedShapeFields={selectedShapeFields}
-              beginSelectionFieldEdit={beginSelectionFieldEdit}
-              handleSelectionFieldInput={handleSelectionFieldInput}
-              commitSelectionFieldEdits={commitSelectionFieldEdits}
-              duplicateSelectedShape={duplicateSelectedShape}
-              deleteSelectedShape={deleteSelectedShape}
-              feedbackClass={feedbackClass}
-              colorStackEnabled={colorStackEnabled}
-              palettesApi={colorPalettes}
-              collapsed={isSectionCollapsed("selection")}
-              onToggle={() => toggleSection("selection")}
-            />
-          )}
-
-          {activeLayer?.type === "text" && showDesktopSection("tool") && (
-            <TextPropertiesSection
-              activeLayer={activeLayer}
-              updateTextLayer={updateTextLayer}
-              startEditingText={id => setEditingText({ layerId: id })}
-              collapsed={isSectionCollapsed("text")}
-              onToggle={() => toggleSection("text")}
-            />
-          )}
-
-          {/* Color Palette */}
-          {showDesktopSection("palette") && (
-            <PaletteSection
-              recentColors={recentColors}
-              color1={color1}
-              color2={color2}
-              color1Input={color1Input}
-              color2Input={color2Input}
-              setColor1Input={setColor1Input}
-              setColor2Input={setColor2Input}
-              applyPrimaryColor={applyPrimaryColor}
-              applySecondaryColor={applySecondaryColor}
-              commitColor={commitColor}
-              feedbackClass={feedbackClass}
-              fieldFeedbackClass={fieldFeedbackClass}
-              colorStackEnabled={colorStackEnabled}
-              palettesApi={colorPalettes}
-              collapsed={isSectionCollapsed("palette")}
-              onToggle={() => toggleSection("palette")}
-            />
-          )}
-
-          {/* Layers */}
           {showDesktopSection("layers") && (
-            <LayersSection
-              feedbackClass={feedbackClass}
-              layers={layers}
-              activeLayer={activeLayer}
-              activeId={activeId}
-              layerNameInput={layerNameInput}
-              setLayerNameInput={setLayerNameInput}
-              commitActiveLayerName={commitActiveLayerName}
-              toggleLock={toggleLock}
-              duplicateActiveLayer={duplicateActiveLayer}
-              mergeLayerDown={mergeLayerDown}
-              rasterizeLayer={rasterizeLayer}
-              canMergeDown={canMergeDown}
-              addLayer={addLayer}
-              delLayer={delLayer}
-              canMoveUp={canMoveUp}
-              canMoveDown={canMoveDown}
-              moveLayer={moveLayer}
-              setBlend={setBlend}
-              layerOpacityValue={layerOpacityValue}
-              beginLayerOpacityEdit={beginLayerOpacityEdit}
-              handleLayerOpacityInput={handleLayerOpacityInput}
-              commitLayerOpacityEdit={commitLayerOpacityEdit}
-              dragLayerId={dragLayerId}
-              dragOverLayerId={dragOverLayerId}
-              intentLayerId={intentLayerId}
-              intentLayerTone={intentLayerTone}
-              suggestedLayerId={suggestedLayerId}
-              setActiveId={setActiveId}
-              onLayerDragStart={onLayerDragStart}
-              onLayerDragEnd={onLayerDragEnd}
-              onLayerDragEnter={onLayerDragEnter}
-              onLayerDragLeave={onLayerDragLeave}
-              onLayerDrop={onLayerDrop}
-              toggleVis={toggleVis}
-              onLayerContextMenu={(e, layerId) => {
-                e.preventDefault();
-                setContextMenu({ x: e.clientX, y: e.clientY, items: layerContextItems(layerId) });
-              }}
-              onLayerLongPressStart={(e, layerId) => {
-                startLongPress(e, (x, y) => setContextMenu({ x, y, items: layerContextItems(layerId) }));
-              }}
-              onLayerLongPressCancel={cancelLongPress}
-              collapsed={isSectionCollapsed("layers")}
-              onToggle={() => toggleSection("layers")}
-            />
+            <div
+              id="pf-panel-layers"
+              className="pf-panel-page"
+              role="tabpanel"
+              aria-labelledby="pf-panel-tab-layers"
+            >
+              <LayersSection
+                feedbackClass={feedbackClass}
+                layers={layers}
+                activeLayer={activeLayer}
+                activeId={activeId}
+                layerNameInput={layerNameInput}
+                setLayerNameInput={setLayerNameInput}
+                commitActiveLayerName={commitActiveLayerName}
+                toggleLock={toggleLock}
+                duplicateActiveLayer={duplicateActiveLayer}
+                mergeLayerDown={mergeLayerDown}
+                rasterizeLayer={rasterizeLayer}
+                canMergeDown={canMergeDown}
+                addLayer={addLayer}
+                delLayer={delLayer}
+                canMoveUp={canMoveUp}
+                canMoveDown={canMoveDown}
+                moveLayer={moveLayer}
+                setBlend={setBlend}
+                layerOpacityValue={layerOpacityValue}
+                beginLayerOpacityEdit={beginLayerOpacityEdit}
+                handleLayerOpacityInput={handleLayerOpacityInput}
+                commitLayerOpacityEdit={commitLayerOpacityEdit}
+                dragLayerId={dragLayerId}
+                dragOverLayerId={dragOverLayerId}
+                intentLayerId={intentLayerId}
+                intentLayerTone={intentLayerTone}
+                suggestedLayerId={suggestedLayerId}
+                setActiveId={setActiveId}
+                onLayerDragStart={onLayerDragStart}
+                onLayerDragEnd={onLayerDragEnd}
+                onLayerDragEnter={onLayerDragEnter}
+                onLayerDragLeave={onLayerDragLeave}
+                onLayerDrop={onLayerDrop}
+                toggleVis={toggleVis}
+                onLayerContextMenu={(e, layerId) => {
+                  e.preventDefault();
+                  setContextMenu({ x: e.clientX, y: e.clientY, items: layerContextItems(layerId) });
+                }}
+                onLayerLongPressStart={(e, layerId) => {
+                  startLongPress(e, (x, y) => setContextMenu({ x, y, items: layerContextItems(layerId) }));
+                }}
+                onLayerLongPressCancel={cancelLongPress}
+                collapsed={isSectionCollapsed("layers")}
+                onToggle={() => toggleSection("layers")}
+              />
+            </div>
+          )}
+
+          {showDesktopSection("properties") && (
+            <div
+              id="pf-panel-properties"
+              className="pf-panel-page"
+              role="tabpanel"
+              aria-labelledby="pf-panel-tab-properties"
+            >
+              {selectedShape && selectedShapeType && (
+                <SelectionSection
+                  selectedShapeType={selectedShapeType}
+                  selectedShapeFields={selectedShapeFields}
+                  beginSelectionFieldEdit={beginSelectionFieldEdit}
+                  handleSelectionFieldInput={handleSelectionFieldInput}
+                  commitSelectionFieldEdits={commitSelectionFieldEdits}
+                  duplicateSelectedShape={duplicateSelectedShape}
+                  deleteSelectedShape={deleteSelectedShape}
+                  feedbackClass={feedbackClass}
+                  colorStackEnabled={colorStackEnabled}
+                  palettesApi={colorPalettes}
+                  collapsed={isSectionCollapsed("selection")}
+                  onToggle={() => toggleSection("selection")}
+                />
+              )}
+
+              {activeLayer?.type === "text" && (
+                <TextPropertiesSection
+                  activeLayer={activeLayer}
+                  updateTextLayer={updateTextLayer}
+                  startEditingText={id => setEditingText({ layerId: id })}
+                  collapsed={isSectionCollapsed("text")}
+                  onToggle={() => toggleSection("text")}
+                />
+              )}
+
+              <PaletteSection
+                recentColors={recentColors}
+                color1={color1}
+                color2={color2}
+                color1Input={color1Input}
+                color2Input={color2Input}
+                setColor1Input={setColor1Input}
+                setColor2Input={setColor2Input}
+                applyPrimaryColor={applyPrimaryColor}
+                applySecondaryColor={applySecondaryColor}
+                commitColor={commitColor}
+                feedbackClass={feedbackClass}
+                fieldFeedbackClass={fieldFeedbackClass}
+                colorStackEnabled={colorStackEnabled}
+                palettesApi={colorPalettes}
+                collapsed={isSectionCollapsed("palette")}
+                onToggle={() => toggleSection("palette")}
+              />
+            </div>
+          )}
+
+          {showDesktopSection("history") && (
+            <div
+              id="pf-panel-history"
+              className="pf-panel-page"
+              role="tabpanel"
+              aria-labelledby="pf-panel-tab-history"
+            >
+              <HistorySection
+                undoN={undoN}
+                redoN={redoN}
+                onUndo={handleUndo}
+                onRedo={handleRedo}
+                collapsed={isSectionCollapsed("history")}
+                onToggle={() => toggleSection("history")}
+              />
+            </div>
           )}
         </div>
       </div>
