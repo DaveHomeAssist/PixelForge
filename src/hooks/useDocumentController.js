@@ -318,6 +318,12 @@ export default function useDocumentController({
           layer.canvas = nextCanvas;
           return;
         }
+        if (layer.type === "text") {
+          layer.ox = (layer.ox ?? 0) + dx;
+          layer.oy = (layer.oy ?? 0) + dy;
+          return;
+        }
+        if (!Array.isArray(layer.shapes)) return;
         layer.shapes.forEach(shape => {
           if (shape.type === "line" || shape.type === "path") {
             shape.x1 += dx;

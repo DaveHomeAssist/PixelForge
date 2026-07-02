@@ -194,6 +194,47 @@ describe("useDocumentController", () => {
     expect(args.historyApi.withFullHistory).not.toHaveBeenCalled();
   });
 
+  it("resizes canvas text layers by offsetting their origin", () => {
+    const textLayer = {
+      id: "text-1",
+      name: "Title",
+      type: "text",
+      ox: 12,
+      oy: 18,
+      text: "PixelForge",
+    };
+    const vectorLayer = {
+      id: "vector-1",
+      name: "Vector",
+      type: "vector",
+      shapes: [{ type: "rect", x: 8, y: 10, w: 20, h: 20 }],
+    };
+    const args = makeArgs({
+      docState: {
+        docW: 100,
+        docH: 100,
+        resizeForm: { width: 120, height: 140, anchor: "center" },
+      },
+    });
+    args.docRef.current = {
+      layers: { "text-1": textLayer, "vector-1": vectorLayer },
+      order: ["text-1", "vector-1"],
+    };
+
+    const { result } = renderHook(() => useDocumentController(args));
+
+    act(() => {
+      result.current.applyResizeCanvas();
+    });
+
+    expect(textLayer.ox).toBe(22);
+    expect(textLayer.oy).toBe(38);
+    expect(vectorLayer.shapes[0].x).toBe(18);
+    expect(vectorLayer.shapes[0].y).toBe(30);
+    expect(args.stateSetters.setDocW).toHaveBeenCalledWith(120);
+    expect(args.stateSetters.setDocH).toHaveBeenCalledWith(140);
+  });
+
   it("hydrates a recovered draft into editor state and clears the recovery prompt", async () => {
     const project = {
       doc: { layers: { "layer-9": { id: "layer-9", type: "raster" } }, order: ["layer-9"] },

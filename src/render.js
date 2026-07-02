@@ -1,4 +1,4 @@
-import { CHECKER, DEFAULT_PRIMARY } from "./constants.js";
+import { CHECKER } from "./constants.js";
 import { drawShape, getShapeBounds, getShapeHandles } from "./shapes.js";
 import { drawText, drawTextSelection } from "./text.js";
 import { makeCanvas } from "./utils.js";
@@ -18,7 +18,7 @@ export function drawShapeSelection(ctx, layer, shape, zoom) {
   if (!bounds) return;
   ctx.save();
   ctx.translate(layer.ox, layer.oy);
-  ctx.strokeStyle = "rgba(25,77,111,0.95)";
+  ctx.strokeStyle = "rgba(245, 166, 35, 0.95)";
   ctx.fillStyle = "#ffffff";
   ctx.lineWidth = 1.5 / zoom;
   ctx.setLineDash([6 / zoom, 4 / zoom]);
@@ -72,9 +72,9 @@ export function renderEditor({
   ctx.scale(dpr, dpr);
 
   const viewportBackground = getCachedCanvas(renderCache, "viewport", vw, vh, (bg, width, height) => {
-    bg.fillStyle = "#ece4d8";
+    bg.fillStyle = "#0b0c0e";
     bg.fillRect(0, 0, width, height);
-    bg.fillStyle = "#d3c8b7";
+    bg.fillStyle = "rgba(255, 255, 255, 0.11)";
     for (let y = 0; y < height; y += 24) {
       for (let x = 0; x < width; x += 24) bg.fillRect(x, y, 1, 1);
     }
@@ -88,7 +88,7 @@ export function renderEditor({
   const checkerboard = getCachedCanvas(renderCache, "checker", docW, docH, (bg, width, height) => {
     for (let y = 0; y < height; y += CHECKER) {
       for (let x = 0; x < width; x += CHECKER) {
-        bg.fillStyle = (Math.floor(x / CHECKER) + Math.floor(y / CHECKER)) % 2 === 0 ? "#faf7f1" : "#eee5d8";
+        bg.fillStyle = (Math.floor(x / CHECKER) + Math.floor(y / CHECKER)) % 2 === 0 ? "#f8fafc" : "#e7edf1";
         bg.fillRect(x, y, CHECKER, CHECKER);
       }
     }
@@ -98,7 +98,7 @@ export function renderEditor({
   if (workspace.showGrid || workspace.pixelPreview) {
     const grid = workspace.pixelPreview && zoom >= 8 ? 1 : 64;
     ctx.save();
-    ctx.strokeStyle = workspace.pixelPreview && zoom >= 8 ? "rgba(25, 77, 111, 0.24)" : "rgba(42,111,151,0.16)";
+    ctx.strokeStyle = workspace.pixelPreview && zoom >= 8 ? "rgba(45, 212, 191, 0.28)" : "rgba(92, 200, 255, 0.18)";
     ctx.lineWidth = 1 / zoom;
     for (let x = 0; x <= docW; x += grid) {
       ctx.beginPath();
@@ -201,12 +201,12 @@ export function renderEditor({
     }
   }
 
-  ctx.strokeStyle = "#bfae98";
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
   ctx.lineWidth = 1.5 / zoom;
   ctx.strokeRect(0, 0, docW, docH);
 
   const cm = 12 / zoom;
-  ctx.strokeStyle = "rgba(42,111,151,0.35)";
+  ctx.strokeStyle = "rgba(245, 166, 35, 0.58)";
   ctx.lineWidth = 1.5 / zoom;
   [[0, 0, cm, 0, 0, cm], [docW, 0, -cm, 0, 0, cm], [0, docH, cm, 0, 0, -cm], [docW, docH, -cm, 0, 0, -cm]].forEach(([x, y, dx1, dy1, dx2, dy2]) => {
     ctx.beginPath();
@@ -219,12 +219,12 @@ export function renderEditor({
 
   if (workspace.showRulers) {
     ctx.save();
-    ctx.fillStyle = "rgba(255,255,255,0.82)";
+    ctx.fillStyle = "rgba(17, 19, 22, 0.92)";
     ctx.fillRect(0, 0, vw, 22);
     ctx.fillRect(0, 0, 28, vh);
-    ctx.strokeStyle = "rgba(42,111,151,0.35)";
-    ctx.fillStyle = "#194d6f";
-    ctx.font = "10px IBM Plex Mono, monospace";
+    ctx.strokeStyle = "rgba(92, 200, 255, 0.32)";
+    ctx.fillStyle = "#a5acb5";
+    ctx.font = "10px Geist Mono, JetBrains Mono, monospace";
     const step = zoom >= 1 ? 100 : 250;
     for (let x = 0; x <= docW; x += step) {
       const sx = pan.x + x * zoom;
@@ -248,13 +248,13 @@ export function renderEditor({
   if (["brush", "eraser"].includes(tool) && !isPanning) {
     const radius = (brushSize * zoom) / 2;
     ctx.save();
-    ctx.strokeStyle = tool === "eraser" ? "rgba(208,100,69,0.72)" : "rgba(42,111,151,0.72)";
+    ctx.strokeStyle = tool === "eraser" ? "rgba(255, 107, 107, 0.76)" : "rgba(245, 166, 35, 0.78)";
     ctx.lineWidth = 1;
     ctx.setLineDash([4, 4]);
     ctx.beginPath();
     ctx.arc(screenPoint.x, screenPoint.y, Math.max(radius, 2), 0, Math.PI * 2);
     ctx.stroke();
-    ctx.fillStyle = tool === "eraser" ? "#d06445" : DEFAULT_PRIMARY;
+    ctx.fillStyle = tool === "eraser" ? "#ff6b6b" : "#f5a623";
     ctx.beginPath();
     ctx.arc(screenPoint.x, screenPoint.y, 1.5, 0, Math.PI * 2);
     ctx.fill();

@@ -93,6 +93,13 @@ export default function EditorMenu({
     { key: kind },
   );
 
+  const brand = (
+    <span className="pf-menu-brand">
+      <span className="pf-brand-mark" aria-hidden="true" />
+      <span className="pf-brand-name">PixelForge</span>
+    </span>
+  );
+
   const menuButton = (menuId, label) => (
     <button
       className={`pf-menu-trigger ${openMenu === menuId ? "active" : ""}`}
@@ -126,7 +133,7 @@ export default function EditorMenu({
         <Menu size={16} />
       </button>
       <div className="pf-menu-group">
-        <span className="pf-menu-brand">PixelForge</span>
+        {brand}
         <div className="pf-menu-sep" />
         <div className="pf-menu-dropdown">
           {menuButton("file", "File")}
@@ -217,7 +224,7 @@ export default function EditorMenu({
         <div className="pf-mobile-menu-backdrop" role="dialog" aria-modal="true" aria-label="Editor menu">
           <div className="pf-mobile-menu-sheet">
             <div className="pf-mobile-menu-head">
-              <span className="pf-menu-brand">PixelForge</span>
+              {brand}
               <button className="pf-icon-btn" type="button" onClick={() => setMobileOpen(false)} aria-label="Close menu"><X size={16} /></button>
             </div>
             <div className="pf-mobile-menu-grid">
