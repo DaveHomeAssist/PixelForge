@@ -13,6 +13,7 @@ async (page) => {
     { key: "templates", hash: "#/templates", selector: ".pf-route-templates", text: "Template gallery" },
     { key: "guide", hash: "#/guide", selector: ".pf-route-guide", text: "The friendly guide to PixelForge" },
     { key: "onboarding", hash: "#/onboarding", selector: ".pf-route-onboarding", text: "Welcome to" },
+    { key: "brand", hash: "#/brand", selector: ".pf-route-brand", text: "PixelForge brand system" },
   ];
 
   const result = { baseUrl, checks: [], failures: [] };

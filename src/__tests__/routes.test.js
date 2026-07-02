@@ -17,6 +17,8 @@ describe("routes", () => {
     expect(getRouteFromLocation(makeLocation("/PixelForge/guide.html"))).toBe(ROUTES.guide);
     expect(getRouteFromLocation(makeLocation("/PixelForge/PixelForge Guide.html"))).toBe(ROUTES.guide);
     expect(getRouteFromLocation(makeLocation("/PixelForge/PixelForge Onboarding.html"))).toBe(ROUTES.onboarding);
+    expect(getRouteFromLocation(makeLocation("/PixelForge/PixelForge Logo.html"))).toBe(ROUTES.brand);
+    expect(getRouteFromLocation(makeLocation("/PixelForge/brand.html"))).toBe(ROUTES.brand);
     expect(getRouteFromLocation(makeLocation("/PixelForge/PixelForge.html"))).toBe(ROUTES.editor);
   });
 

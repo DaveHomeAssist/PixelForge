@@ -132,7 +132,10 @@ async (page) => {
     await routeCheck("#/templates", ".pf-route-templates", "Template gallery", "Templates route renders");
     await routeCheck("#/guide", ".pf-route-guide", "The friendly guide to PixelForge", "Guide route renders");
     await routeCheck("#/onboarding", ".pf-route-onboarding", "Welcome to", "Onboarding route renders");
+    await routeCheck("#/brand", ".pf-route-brand", "PixelForge brand system", "Brand route renders");
 
+    await page.goto(urlFor("#/onboarding"), { waitUntil: "networkidle" });
+    await page.locator(".pf-route-onboarding").waitFor({ state: "visible", timeout: 5000 });
     await page.getByRole("button", { name: "Get started" }).click();
     await page.getByRole("button", { name: "Continue" }).click();
     await page.getByRole("button", { name: "Continue" }).click();
@@ -145,9 +148,12 @@ async (page) => {
     await endpointCheck("templates.html", "#/templates", ".pf-route-templates", "Clean templates endpoint resolves");
     await endpointCheck("guide.html", "#/guide", ".pf-route-guide", "Clean guide endpoint resolves");
     await endpointCheck("onboarding.html", "#/onboarding", ".pf-route-onboarding", "Clean onboarding endpoint resolves");
+    await endpointCheck("brand.html", "#/brand", ".pf-route-brand", "Clean brand endpoint resolves");
+    await endpointCheck("logo.html", "#/brand", ".pf-route-brand", "Clean logo endpoint resolves");
     await endpointCheck("editor.html", "#/editor", ".pf", "Clean editor endpoint resolves");
     await endpointCheck("PixelForge Guide.html", "#/guide", ".pf-route-guide", "Prototype guide filename resolves");
     await endpointCheck("PixelForge Onboarding.html", "#/onboarding", ".pf-route-onboarding", "Prototype onboarding filename resolves");
+    await endpointCheck("PixelForge Logo.html", "#/brand", ".pf-route-brand", "Prototype logo filename resolves");
     await endpointCheck("PixelForge.html", "#/editor", ".pf", "Prototype editor filename resolves");
 
     await page.goto(urlFor("#/editor"), { waitUntil: "networkidle" });

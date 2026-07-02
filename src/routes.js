@@ -3,6 +3,7 @@ export const ROUTES = {
   templates: "templates",
   guide: "guide",
   onboarding: "onboarding",
+  brand: "brand",
   editor: "editor",
 };
 
@@ -18,6 +19,9 @@ const PATH_ALIASES = new Map([
   ["pixelforge guide.html", ROUTES.guide],
   ["onboarding.html", ROUTES.onboarding],
   ["pixelforge onboarding.html", ROUTES.onboarding],
+  ["brand.html", ROUTES.brand],
+  ["logo.html", ROUTES.brand],
+  ["pixelforge logo.html", ROUTES.brand],
   ["editor.html", ROUTES.editor],
   ["pixelforge.html", ROUTES.editor],
 ]);

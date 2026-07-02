@@ -4,6 +4,7 @@ import PixelForge from "./PixelForge.jsx";
 import LauncherPage from "./pages/LauncherPage.jsx";
 import GuidePage from "./pages/GuidePage.jsx";
 import OnboardingPage from "./pages/OnboardingPage.jsx";
+import BrandPage from "./pages/BrandPage.jsx";
 import { getRouteFromLocation, navigateToRoute, ROUTES } from "./routes.js";
 
 export default function App() {
@@ -25,5 +26,6 @@ export default function App() {
   if (route === ROUTES.editor) return <PixelForge />;
   if (route === ROUTES.guide) return <GuidePage navigate={navigate} />;
   if (route === ROUTES.onboarding) return <OnboardingPage navigate={navigate} />;
+  if (route === ROUTES.brand) return <BrandPage navigate={navigate} />;
   return <LauncherPage navigate={navigate} initialView={route === ROUTES.templates ? "templates" : "home"} />;
 }

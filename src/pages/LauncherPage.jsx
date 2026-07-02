@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  ArrowUpRight, BookOpen, Clock3, FileText, FolderOpen, Home, Layers, Monitor,
+  ArrowUpRight, Badge, BookOpen, Clock3, FileText, FolderOpen, Home, Layers, Monitor,
   Palette, Play, Plus, Search, Upload,
 } from "lucide-react";
 import { ROUTES, routeHref } from "../routes.js";
@@ -129,6 +129,7 @@ export default function LauncherPage({ navigate, initialView = "home" }) {
           <PageLink route={ROUTES.templates} active={isTemplates} navigate={navigate}><Layers size={16} /> Templates</PageLink>
           <PageLink route={ROUTES.guide} navigate={navigate}><BookOpen size={16} /> User Guide</PageLink>
           <PageLink route={ROUTES.onboarding} navigate={navigate}><Play size={16} /> Onboarding</PageLink>
+          <PageLink route={ROUTES.brand} navigate={navigate}><Badge size={16} /> Brand</PageLink>
         </nav>
         <button className="pf-page-btn primary wide" type="button" onClick={() => setModalOpen(true)}>
           <Plus size={16} /> New Project
