@@ -21,6 +21,13 @@ function LayerTypeIcon({ type }) {
   return <Square size={12} />;
 }
 
+function getLayerRowLabel(layer) {
+  const type = layer.type === "raster" ? "raster" : layer.type === "text" ? "text" : "vector";
+  const visibility = layer.visible ? "visible" : "hidden";
+  const lock = layer.locked ? "locked" : "unlocked";
+  return `Select ${layer.name} layer, ${type}, ${visibility}, ${lock}`;
+}
+
 export default function LayersSection({
   feedbackClass,
   layers,
@@ -62,6 +69,13 @@ export default function LayersSection({
   collapsed = false,
   onToggle,
 }) {
+  const handleLayerRowKeyDown = (event, layerId) => {
+    if (event.target !== event.currentTarget) return;
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    setActiveId(layerId);
+  };
+
   return (
     <div className={`pf-section ${feedbackClass("layers")}`} style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <button type="button" className="pf-section-head pf-section-toggle" onClick={onToggle} aria-expanded={!collapsed}>
@@ -82,21 +96,21 @@ export default function LayersSection({
               onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }}
               aria-label="Active layer name"
             />
-            <button className={`pf-layer-abtn ${feedbackClass("layer-lock")}`} onClick={() => toggleLock(activeId)}>{activeLayer.locked ? "Unlock" : "Lock"}</button>
+            <button type="button" className={`pf-layer-abtn ${feedbackClass("layer-lock")}`} onClick={() => toggleLock(activeId)}>{activeLayer.locked ? "Unlock" : "Lock"}</button>
           </div>
           <div className="pf-inline-actions" style={{ marginTop: 8 }}>
-            <button className={`pf-layer-abtn ${feedbackClass("layer-duplicate")}`} onClick={duplicateActiveLayer}>Duplicate</button>
-            <button className={`pf-layer-abtn ${feedbackClass("layer-merge")}`} onClick={() => mergeLayerDown(activeId)} disabled={!canMergeDown}>Merge Down</button>
-            <button className={`pf-layer-abtn ${feedbackClass("layer-rasterize")}`} onClick={() => rasterizeLayer?.(activeId)} disabled={activeLayer.type === "raster"}>Rasterize</button>
+            <button type="button" className={`pf-layer-abtn ${feedbackClass("layer-duplicate")}`} onClick={duplicateActiveLayer}>Duplicate</button>
+            <button type="button" className={`pf-layer-abtn ${feedbackClass("layer-merge")}`} onClick={() => mergeLayerDown(activeId)} disabled={!canMergeDown}>Merge Down</button>
+            <button type="button" className={`pf-layer-abtn ${feedbackClass("layer-rasterize")}`} onClick={() => rasterizeLayer?.(activeId)} disabled={activeLayer.type === "raster"}>Rasterize</button>
           </div>
         </div>
       )}
       {!collapsed && <div className="pf-layer-actions">
-        <button className={`pf-layer-abtn ${feedbackClass("layer-add-raster")}`} onClick={() => addLayer("raster")} title="Add raster layer"><Plus size={10} /><Image size={10} /> Raster</button>
-        <button className={`pf-layer-abtn ${feedbackClass("layer-add-vector")}`} onClick={() => addLayer("vector")} title="Add vector layer"><Plus size={10} /><Square size={10} /> Vector</button>
-        <button className={`pf-layer-abtn ${feedbackClass("layer-delete")}`} onClick={() => activeId && delLayer(activeId)} disabled={!activeId || layers.length <= 1} title="Delete active layer"><Trash2 size={10} /></button>
-        <button className={`pf-layer-abtn ${feedbackClass("layer-up")}`} onClick={() => activeId && moveLayer(activeId, 1)} disabled={!canMoveUp} title="Move layer up"><ChevronUp size={10} /></button>
-        <button className={`pf-layer-abtn ${feedbackClass("layer-down")}`} onClick={() => activeId && moveLayer(activeId, -1)} disabled={!canMoveDown} title="Move layer down"><ChevronDown size={10} /></button>
+        <button type="button" className={`pf-layer-abtn ${feedbackClass("layer-add-raster")}`} onClick={() => addLayer("raster")} title="Add raster layer"><Plus size={10} /><Image size={10} /> Raster</button>
+        <button type="button" className={`pf-layer-abtn ${feedbackClass("layer-add-vector")}`} onClick={() => addLayer("vector")} title="Add vector layer"><Plus size={10} /><Square size={10} /> Vector</button>
+        <button type="button" className={`pf-layer-abtn ${feedbackClass("layer-delete")}`} onClick={() => activeId && delLayer(activeId)} disabled={!activeId || layers.length <= 1} title="Delete active layer"><Trash2 size={10} /></button>
+        <button type="button" className={`pf-layer-abtn ${feedbackClass("layer-up")}`} onClick={() => activeId && moveLayer(activeId, 1)} disabled={!canMoveUp} title="Move layer up"><ChevronUp size={10} /></button>
+        <button type="button" className={`pf-layer-abtn ${feedbackClass("layer-down")}`} onClick={() => activeId && moveLayer(activeId, -1)} disabled={!canMoveDown} title="Move layer down"><ChevronDown size={10} /></button>
       </div>}
 
       {!collapsed && activeLayer && (
@@ -125,7 +139,12 @@ export default function LayersSection({
           <div
             key={layer.id}
             className={`pf-layer ${layer.id === activeId ? "active" : ""} ${dragLayerId === layer.id ? "dragging" : ""} ${dragOverLayerId === layer.id ? "drop-target" : ""} ${intentLayerId === layer.id ? `cue-${intentLayerTone}` : ""} ${suggestedLayerId === layer.id ? "suggested" : ""}`}
+            role="button"
+            tabIndex={0}
+            aria-label={getLayerRowLabel(layer)}
+            aria-pressed={layer.id === activeId}
             onClick={() => setActiveId(layer.id)}
+            onKeyDown={event => handleLayerRowKeyDown(event, layer.id)}
             draggable
             onDragStart={() => onLayerDragStart(layer.id)}
             onDragEnd={onLayerDragEnd}
@@ -139,7 +158,13 @@ export default function LayersSection({
             onPointerUp={onLayerLongPressCancel}
             onPointerCancel={onLayerLongPressCancel}
           >
-            <button className={`pf-layer-vis ${feedbackClass(`layer-visibility-${layer.id}`)}`} onClick={e => { e.stopPropagation(); toggleVis(layer.id); }} title={layer.visible ? "Hide layer" : "Show layer"}>
+            <button
+              type="button"
+              className={`pf-layer-vis ${feedbackClass(`layer-visibility-${layer.id}`)}`}
+              onClick={e => { e.stopPropagation(); toggleVis(layer.id); }}
+              title={layer.visible ? "Hide layer" : "Show layer"}
+              aria-label={layer.visible ? `Hide ${layer.name} layer` : `Show ${layer.name} layer`}
+            >
               {layer.visible ? <Eye size={12} /> : <EyeOff size={12} />}
             </button>
             <span className="pf-layer-icon" style={{ color: getLayerTypeColor(layer.type) }}>
@@ -157,7 +182,13 @@ export default function LayersSection({
                 {Math.round(layer.opacity * 100) !== 100 && <span className="pf-layer-tag">{Math.round(layer.opacity * 100)}%</span>}
               </div>
             </div>
-            <button className={`pf-layer-lock ${feedbackClass("layer-lock")}`} onClick={e => { e.stopPropagation(); toggleLock(layer.id); }} title={layer.locked ? "Unlock layer" : "Lock layer"}>
+            <button
+              type="button"
+              className={`pf-layer-lock ${feedbackClass("layer-lock")}`}
+              onClick={e => { e.stopPropagation(); toggleLock(layer.id); }}
+              title={layer.locked ? "Unlock layer" : "Lock layer"}
+              aria-label={layer.locked ? `Unlock ${layer.name} layer` : `Lock ${layer.name} layer`}
+            >
               {layer.locked ? "L" : "-"}
             </button>
           </div>

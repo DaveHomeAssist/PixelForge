@@ -860,6 +860,10 @@
   background: rgba(255,255,255,0.72);
   border-color: rgba(204, 189, 169, 0.7);
 }
+.pf-layer:focus-visible {
+  outline: 2px solid rgba(var(--pf-accent-rgb), 0.72);
+  outline-offset: 2px;
+}
 .pf-layer.active {
   background: linear-gradient(180deg, rgba(42,111,151,0.12), rgba(255,255,255,0.95));
   border-color: rgba(42, 111, 151, 0.22);
