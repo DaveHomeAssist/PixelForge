@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   clamp, dist, normalizeHexColor, mergePrefs, pushRecentValue,
-  pushRecentPreset, normalizePanelTab, getToolRequirement, extractRegion, getAnchorOffset, reorderList,
+  pushRecentPreset, normalizePanelTab, isToolCompatibleWithLayer, getToolTargetLabel,
+  getToolRequirement, extractRegion, getAnchorOffset, reorderList,
 } from "../utils.js";
 
 describe("clamp", () => {
@@ -72,6 +73,34 @@ describe("getToolRequirement", () => {
   it("returns vector for rect", () => expect(getToolRequirement("rect")).toBe("vector"));
   it("returns null for move (both)", () => expect(getToolRequirement("move")).toBeNull());
   it("returns null for unknown", () => expect(getToolRequirement("nonexistent")).toBeNull());
+});
+
+describe("isToolCompatibleWithLayer", () => {
+  const brush = { raster: true, vector: false, text: false };
+  const textTool = { raster: false, vector: false, text: true };
+  const move = { raster: true, vector: true, text: true };
+
+  it("matches raster, vector, and text capabilities independently", () => {
+    expect(isToolCompatibleWithLayer(brush, { type: "raster" })).toBe(true);
+    expect(isToolCompatibleWithLayer(brush, { type: "vector" })).toBe(false);
+    expect(isToolCompatibleWithLayer(textTool, { type: "text" })).toBe(true);
+    expect(isToolCompatibleWithLayer(textTool, { type: "raster" })).toBe(false);
+    expect(isToolCompatibleWithLayer(move, { type: "text" })).toBe(true);
+  });
+
+  it("treats missing tool or layer context as non-blocking", () => {
+    expect(isToolCompatibleWithLayer(brush, null)).toBe(true);
+    expect(isToolCompatibleWithLayer(null, { type: "raster" })).toBe(true);
+  });
+});
+
+describe("getToolTargetLabel", () => {
+  it("names single, paired, and universal tool targets", () => {
+    expect(getToolTargetLabel({ raster: true, vector: false, text: false })).toBe("raster layers");
+    expect(getToolTargetLabel({ raster: true, vector: true, text: false })).toBe("raster or vector layers");
+    expect(getToolTargetLabel({ raster: true, vector: true, text: true })).toBe("all layers");
+    expect(getToolTargetLabel(null)).toBe("a compatible layer");
+  });
 });
 
 describe("getAnchorOffset", () => {

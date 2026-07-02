@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { TOOLS, TOOL_COPY, DEFAULT_PRIMARY, DEFAULT_SECONDARY } from "../constants.js";
-import { getToolRequirement, normalizePanelTab } from "../utils.js";
+import { getToolRequirement, isToolCompatibleWithLayer, normalizePanelTab } from "../utils.js";
 import { getResizeCursor } from "../shapes.js";
 
 /**
@@ -51,7 +51,7 @@ export default function useDerivedState({
   const hoverToolMeta = TOOLS.find(t => t.id === hoverToolId) || null;
   const panelToolMeta = hoverToolMeta || toolMeta;
   const panelToolCopy = TOOL_COPY[panelToolMeta.id];
-  const toolCompatible = !activeLayer || (activeLayer.type === "raster" ? toolMeta.raster : toolMeta.vector);
+  const toolCompatible = isToolCompatibleWithLayer(toolMeta, activeLayer);
   const activeIndex = layers.findIndex(l => l.id === activeId);
   const canMoveDown = activeIndex > 0;
   const canMoveUp = activeIndex >= 0 && activeIndex < layers.length - 1;

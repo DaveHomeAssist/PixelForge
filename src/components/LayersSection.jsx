@@ -1,7 +1,25 @@
 import {
-  Eye, EyeOff, Plus, Trash2, ChevronUp, ChevronDown, ChevronRight, Image, Square,
+  Eye, EyeOff, Plus, Trash2, ChevronUp, ChevronDown, ChevronRight, Image, Square, Type,
 } from "lucide-react";
 import { BLENDS } from "../constants.js";
+
+function getLayerTypeColor(type) {
+  if (type === "raster") return "#49697b";
+  if (type === "text") return "#7c659d";
+  return "#8c6740";
+}
+
+function getLayerTypeBadge(type) {
+  if (type === "raster") return "PX";
+  if (type === "text") return "TXT";
+  return "VEC";
+}
+
+function LayerTypeIcon({ type }) {
+  if (type === "raster") return <Image size={12} />;
+  if (type === "text") return <Type size={12} />;
+  return <Square size={12} />;
+}
 
 export default function LayersSection({
   feedbackClass,
@@ -124,13 +142,13 @@ export default function LayersSection({
             <button className={`pf-layer-vis ${feedbackClass(`layer-visibility-${layer.id}`)}`} onClick={e => { e.stopPropagation(); toggleVis(layer.id); }} title={layer.visible ? "Hide layer" : "Show layer"}>
               {layer.visible ? <Eye size={12} /> : <EyeOff size={12} />}
             </button>
-            <span className="pf-layer-icon" style={{ color: layer.type === "raster" ? "#49697b" : "#8c6740" }}>
-              {layer.type === "raster" ? <Image size={12} /> : <Square size={12} />}
+            <span className="pf-layer-icon" style={{ color: getLayerTypeColor(layer.type) }}>
+              <LayerTypeIcon type={layer.type} />
             </span>
             <div className="pf-layer-main">
               <div className="pf-layer-name">{layer.name}</div>
               <div className="pf-layer-meta">
-                <span className="pf-layer-type">{layer.type === "raster" ? "PX" : "VEC"}</span>
+                <span className="pf-layer-type">{getLayerTypeBadge(layer.type)}</span>
                 {suggestedLayerId === layer.id && <span className="pf-layer-tag">Likely</span>}
                 {layer.blend !== "source-over" && <span className="pf-layer-tag">{layer.blend}</span>}
                 {layer.effect && <span className="pf-layer-tag">{layer.effect}</span>}

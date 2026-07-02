@@ -13,6 +13,7 @@ import StatusBar from "./components/StatusBar.jsx";
 import TextEditOverlay from "./components/TextEditOverlay.jsx";
 import AISettingsModal from "./components/AISettingsModal.jsx";
 import AIGenerateModal from "./components/AIGenerateModal.jsx";
+import CompatibilityBanner from "./components/CompatibilityBanner.jsx";
 import ContextMenu from "./components/ContextMenu.jsx";
 import ExportModal from "./components/ExportModal.jsx";
 import CommandPalette from "./components/CommandPalette.jsx";
@@ -38,7 +39,7 @@ import {
 } from "./constants.js";
 import {
   uid, clamp, normalizeHexColor, isEditableTarget,
-  cloneShape, mergePrefs, getToolRequirement, normalizePanelTab,
+  cloneShape, mergePrefs, getToolRequirement, isToolCompatibleWithLayer, normalizePanelTab,
 } from "./utils.js";
 import { renderEditor } from "./render.js";
 import { commitFloat } from "./marquee.js";
@@ -1384,6 +1385,7 @@ export default function PixelForge() {
     canMoveDown,
     canMoveUp,
     canMergeDown,
+    requiredLayerType,
     suggestedLayerId,
     suggestedLayer,
     recentColors,
@@ -1462,6 +1464,11 @@ export default function PixelForge() {
     { id: "properties", label: "Properties", meta: selectedShape ? "SEL" : activeLayer?.type === "text" ? "TXT" : null },
     { id: "history", label: "History", meta: undoN || redoN ? `${undoN}/${redoN}` : null },
   ];
+  const compatibilityMessage = activeLayer?.locked && !["hand", "eyedropper"].includes(toolMeta.id)
+    ? `${activeLayer.name} locked`
+    : activeLayer && !toolCompatible
+      ? `${toolMeta.label} needs ${requiredLayerType ? `${requiredLayerType} layer` : "compatible layer"}`
+      : null;
 
   /* ═══════════════════════════════════════════════════
      JSX
@@ -1534,7 +1541,7 @@ export default function PixelForge() {
           {TOOLS.map(t => (
             <button
               key={t.id}
-              className={`pf-tbtn ${tool === t.id ? "active" : ""} ${activeLayer && !(activeLayer.type === "raster" ? t.raster : t.vector) ? "muted" : ""} ${feedbackClass(`tool-${t.id}`)}`}
+              className={`pf-tbtn ${tool === t.id ? "active" : ""} ${activeLayer && !isToolCompatibleWithLayer(t, activeLayer) ? "muted" : ""} ${feedbackClass(`tool-${t.id}`)}`}
               onClick={() => selectTool(t.id)}
               onMouseEnter={() => setHoverToolId(t.id)}
               onMouseLeave={() => setHoverToolId(null)}
@@ -1655,6 +1662,18 @@ export default function PixelForge() {
             feedbackClass={feedbackClass}
             recoverDraftProject={recoverDraftProject}
             discardRecoveredDraft={discardRecoveredDraft}
+          />
+
+          <CompatibilityBanner
+            activeLayer={activeLayer}
+            toolMeta={toolMeta}
+            toolCompatible={toolCompatible}
+            requiredLayerType={requiredLayerType}
+            suggestedLayer={suggestedLayer}
+            focusLayerId={focusLayerId}
+            addLayer={addLayer}
+            toggleLock={toggleLock}
+            setPanelTab={setMobilePanelTab}
           />
 
           <div className="pf-panel-tabs" role="tablist" aria-label="Editor side panel">
@@ -1876,6 +1895,7 @@ export default function PixelForge() {
         lastSavedAt={lastSavedAt}
         clipboardStatus={clipboardStatus}
         tier2PreviewActive={tier2PreviewActive}
+        compatibilityMessage={compatibilityMessage}
       />
 
       {/* ── Toast ── */}

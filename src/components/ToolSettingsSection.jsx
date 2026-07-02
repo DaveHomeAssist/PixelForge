@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { BRUSH_PRESETS } from "../brushes.js";
 import ColorPickerPopover from "./ColorPickerPopover.jsx";
+import { getToolTargetLabel } from "../utils.js";
 
 export default function ToolSettingsSection({
   panelToolCopy,
@@ -67,7 +68,7 @@ export default function ToolSettingsSection({
 
         {!toolCompatible && activeLayer && (
           <div className="pf-field-help warn">
-            {toolMeta.label} works on {toolMeta.raster && toolMeta.vector ? "all" : toolMeta.raster ? "raster" : "vector"} layers. The current layer is {activeLayer.type}.
+            {toolMeta.label} works on {getToolTargetLabel(toolMeta)}. The current layer is {activeLayer.type}.
             {suggestedLayer && (
               <>
                 {" "}

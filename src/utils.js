@@ -72,6 +72,26 @@ export function normalizePanelTab(tab) {
   return "tool";
 }
 
+export function isToolCompatibleWithLayer(toolMeta, layer) {
+  if (!toolMeta || !layer) return true;
+  if (layer.type === "raster") return !!toolMeta.raster;
+  if (layer.type === "vector") return !!toolMeta.vector;
+  if (layer.type === "text") return !!toolMeta.text;
+  return false;
+}
+
+export function getToolTargetLabel(toolMeta) {
+  if (!toolMeta) return "a compatible layer";
+  const targets = [
+    toolMeta.raster ? "raster" : null,
+    toolMeta.vector ? "vector" : null,
+    toolMeta.text ? "text" : null,
+  ].filter(Boolean);
+  if (targets.length === 0 || targets.length === 3) return "all layers";
+  if (targets.length === 1) return `${targets[0]} layers`;
+  return `${targets.slice(0, -1).join(", ")} or ${targets.at(-1)} layers`;
+}
+
 export function getToolRequirement(toolId) {
   const meta = TOOLS.find(item => item.id === toolId);
   if (!meta) return null;

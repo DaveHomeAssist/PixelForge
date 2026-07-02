@@ -1251,6 +1251,7 @@
   flex-wrap: wrap;
 }
 .pf-status-accent { color: var(--pf-accent-strong); }
+.pf-status-warning { color: var(--pf-accent-strong); }
 .pf-status-badge {
   border: 1px solid rgba(42, 111, 151, 0.28);
   border-radius: 999px;
@@ -1828,6 +1829,7 @@
 
 .pf-mbtn.primary,
 .pf-mbtn.active,
+.pf-chip-btn.primary,
 .pf-chip-btn.active,
 .pf-tab-btn.active {
   border-color: rgba(var(--pf-accent-rgb), 0.72);
@@ -2059,6 +2061,59 @@
 .pf-history-stack {
   display: grid;
   gap: 8px;
+}
+
+.pf-compat-banner {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--pf-line);
+  background: rgba(var(--pf-accent-rgb), 0.08);
+}
+
+.pf-compat-banner.danger {
+  background: var(--pf-danger-soft);
+}
+
+.pf-compat-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  color: var(--pf-accent-strong);
+  background: rgba(var(--pf-accent-rgb), 0.12);
+}
+
+.pf-compat-banner.danger .pf-compat-icon {
+  color: #ffc2c2;
+  background: rgba(255, 107, 107, 0.16);
+}
+
+.pf-compat-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.pf-compat-copy strong {
+  color: var(--pf-text);
+  font-size: 12px;
+}
+
+.pf-compat-copy span {
+  color: var(--pf-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.pf-compat-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .pf-section {

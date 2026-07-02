@@ -10,6 +10,7 @@ export default function StatusBar({
   lastSavedAt,
   clipboardStatus,
   tier2PreviewActive = false,
+  compatibilityMessage = null,
 }) {
   const [isCoarsePointer, setIsCoarsePointer] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -31,8 +32,9 @@ export default function StatusBar({
     <div className="pf-status">
       <span>{docW} × {docH}</span>
       <span className="pf-status-accent">{(zoom * 100).toFixed(0)}%</span>
-      {activeLayer && <span>{activeLayer.name} <span style={{ color: "#c8b9a8" }}>|</span> {activeLayer.type === "raster" ? "RASTER" : "VECTOR"}</span>}
+      {activeLayer && <span>{activeLayer.name} <span style={{ color: "#c8b9a8" }}>|</span> {activeLayer.type.toUpperCase()}</span>}
       <span>{toolMeta.label}</span>
+      {compatibilityMessage && <span className="pf-status-warning">{compatibilityMessage}</span>}
       {tier2PreviewActive && <span className="pf-status-badge">Tier 2 (preview)</span>}
       {clipboardStatus && (
         <span className="pf-status-accent" role="status" aria-live="polite">Clipboard {clipboardStatus}</span>
