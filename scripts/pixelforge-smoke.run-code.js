@@ -42,6 +42,30 @@ async (page) => {
   };
 
   const importImagePath = "scripts/fixtures/smoke-import.svg";
+  const urlFor = (suffix = "") => `${baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`}${suffix}`;
+
+  const routeCheck = async (hash, selector, text, step) => {
+    await page.goto(urlFor(hash), { waitUntil: "networkidle" });
+    const target = page.locator(selector).first();
+    await target.waitFor({ state: "visible", timeout: 5000 }).catch(() => {});
+    const visible = await target.isVisible().catch(() => false);
+    const body = await page.locator("body").innerText().catch(() => "");
+    const includesText = !text || body.toLowerCase().includes(text.toLowerCase());
+    expect(visible && includesText, step, { url: page.url(), selector, text, bodySnippet: body.slice(0, 220) });
+  };
+
+  const endpointCheck = async (path, expectedHash, selector, step) => {
+    await page.goto(urlFor(path), { waitUntil: "networkidle" });
+    const target = page.locator(selector).first();
+    await target.waitFor({ state: "visible", timeout: 5000 }).catch(() => {});
+    const visible = await target.isVisible().catch(() => false);
+    expect(visible && page.url().includes(expectedHash), step, {
+      path,
+      url: page.url(),
+      expectedHash,
+      selector,
+    });
+  };
 
   page.on("console", (msg) => {
     if (msg.type() === "error") result.consoleErrors.push(msg.text());
@@ -102,7 +126,32 @@ async (page) => {
     await page.goto(baseUrl, { waitUntil: "networkidle" });
 
     const title = await page.title();
-    expect(title === "PixelForge", "App shell loads", { title, url: page.url() });
+    expect(title === "PixelForge", "App title loads", { title, url: page.url() });
+    expect(await page.locator(".pf-route-home").isVisible().catch(() => false), "Home launcher route renders at root", { url: page.url() });
+
+    await routeCheck("#/templates", ".pf-route-templates", "Template gallery", "Templates route renders");
+    await routeCheck("#/guide", ".pf-route-guide", "The friendly guide to PixelForge", "Guide route renders");
+    await routeCheck("#/onboarding", ".pf-route-onboarding", "Welcome to", "Onboarding route renders");
+
+    await page.getByRole("button", { name: "Get started" }).click();
+    await page.getByRole("button", { name: "Continue" }).click();
+    await page.getByRole("button", { name: "Continue" }).click();
+    await page.getByRole("button", { name: "Start creating" }).click();
+    await page.waitForTimeout(120);
+    const doneText = await page.locator("body").innerText();
+    expect(/Ready to create/.test(doneText), "Onboarding completes to confirmation", { url: page.url() });
+
+    await endpointCheck("home.html", "#/home", ".pf-route-home", "Clean home endpoint resolves");
+    await endpointCheck("templates.html", "#/templates", ".pf-route-templates", "Clean templates endpoint resolves");
+    await endpointCheck("guide.html", "#/guide", ".pf-route-guide", "Clean guide endpoint resolves");
+    await endpointCheck("onboarding.html", "#/onboarding", ".pf-route-onboarding", "Clean onboarding endpoint resolves");
+    await endpointCheck("editor.html", "#/editor", ".pf", "Clean editor endpoint resolves");
+    await endpointCheck("PixelForge Guide.html", "#/guide", ".pf-route-guide", "Prototype guide filename resolves");
+    await endpointCheck("PixelForge Onboarding.html", "#/onboarding", ".pf-route-onboarding", "Prototype onboarding filename resolves");
+    await endpointCheck("PixelForge.html", "#/editor", ".pf", "Prototype editor filename resolves");
+
+    await page.goto(urlFor("#/editor"), { waitUntil: "networkidle" });
+    await page.locator(".pf").first().waitFor({ state: "visible" });
 
     await page.getByRole("button", { name: "File", exact: true }).click();
     await page.getByRole("menuitem", { name: "New Document" }).click();
@@ -133,6 +182,8 @@ async (page) => {
       matchedStroked: redoCanvas === brushAfter,
     });
 
+    await page.getByRole("tab", { name: /Layers/ }).click();
+    await page.locator(".pf-layer-actions").waitFor({ state: "visible", timeout: 5000 });
     const startLayers = await layerCount();
     await page.locator(".pf-layer-actions").getByRole("button", { name: /Vector/ }).click();
     await page.waitForTimeout(120);
@@ -170,7 +221,7 @@ async (page) => {
 
     const exportDownloadPromise = page.waitForEvent("download", { timeout: 9000 }).catch(() => null);
     await page.getByRole("button", { name: "Export", exact: true }).click();
-    await page.getByRole("dialog", { name: "Export options" }).getByRole("button", { name: "Export", exact: true }).click();
+    await page.getByRole("dialog", { name: "Export" }).getByRole("button", { name: "Export", exact: true }).click();
     const exportDownload = await exportDownloadPromise;
     if (!exportDownload) {
       fail("Export PNG triggers download", {});
@@ -235,8 +286,13 @@ async (page) => {
     const layersBeforePaste = await layerCount();
     await page.keyboard.press("Meta+V");
     await page.waitForTimeout(260);
-    const pasteStatus = await page.locator(".pf-status").textContent();
-    expect(/Clipboard .*pasted/i.test(pasteStatus || ""), "Cmd V pastes current selection clipboard", { pasteStatus });
+    let pasteStatus = await page.locator(".pf-status").textContent();
+    if (!/Clipboard .*pasted/i.test(pasteStatus || "")) {
+      await page.keyboard.press("Control+V");
+      await page.waitForTimeout(260);
+      pasteStatus = await page.locator(".pf-status").textContent();
+    }
+    expect(/Clipboard .*pasted/i.test(pasteStatus || ""), "Cmd/Ctrl V pastes current selection clipboard", { pasteStatus });
     expect(await layerCount() === layersBeforePaste, "Selection paste stays in active raster layer instead of stale image layer", {
       before: layersBeforePaste,
       after: await layerCount(),

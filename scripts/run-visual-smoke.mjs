@@ -45,42 +45,6 @@ function run(command, args, options = {}) {
   });
 }
 
-function shellQuote(value) {
-  return `'${String(value).replaceAll("'", "'\\''")}'`;
-}
-
-function runShell(command, options = {}) {
-  return new Promise((resolve, reject) => {
-    const child = spawn("/bin/zsh", ["-lc", command], {
-      cwd: repoRoot,
-      stdio: options.capture ? ["ignore", "pipe", "pipe"] : "inherit",
-      env: { ...process.env, ...(options.env || {}) },
-    });
-
-    let stdout = "";
-    let stderr = "";
-
-    if (options.capture) {
-      child.stdout.on("data", chunk => {
-        const text = chunk.toString();
-        stdout += text;
-        process.stdout.write(text);
-      });
-      child.stderr.on("data", chunk => {
-        const text = chunk.toString();
-        stderr += text;
-        process.stderr.write(text);
-      });
-    }
-
-    child.on("error", reject);
-    child.on("exit", code => {
-      if (code === 0) resolve({ stdout, stderr });
-      else reject(new Error(`shell command failed with exit code ${code}: ${command}`));
-    });
-  });
-}
-
 function startPreviewServer() {
   return spawn("npm", ["run", "preview", "--", "--host", "127.0.0.1", "--port", String(port)], {
     cwd: repoRoot,
@@ -123,9 +87,7 @@ async function main() {
 
     const codePath = path.join(__dirname, "pixelforge-visual-smoke.run-code.js");
     console.log("[visual-smoke] Opening Playwright session...");
-    await runShell(
-      `export PATH=/opt/homebrew/Cellar/node@22/22.22.1_1/bin:$PATH; npx --yes --package @playwright/cli playwright-cli -s ${shellQuote(session)} open ${shellQuote(url)} >/tmp/pixelforge-visual-open.txt`,
-    );
+    await run("npx", ["--yes", "--package", "@playwright/cli", "playwright-cli", "-s", session, "open", url], { capture: true });
     await new Promise(resolve => setTimeout(resolve, 2000));
 
     console.log("[visual-smoke] Executing visual run-code script...");

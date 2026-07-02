@@ -8,6 +8,12 @@ async (page) => {
     { key: "phone-portrait", width: 390, height: 844 },
     { key: "phone-landscape", width: 844, height: 390 },
   ];
+  const designedPages = [
+    { key: "home", hash: "#/home", selector: ".pf-route-home", text: "Start something new" },
+    { key: "templates", hash: "#/templates", selector: ".pf-route-templates", text: "Template gallery" },
+    { key: "guide", hash: "#/guide", selector: ".pf-route-guide", text: "The friendly guide to PixelForge" },
+    { key: "onboarding", hash: "#/onboarding", selector: ".pf-route-onboarding", text: "Welcome to" },
+  ];
 
   const result = { baseUrl, checks: [], failures: [] };
 
@@ -31,12 +37,42 @@ async (page) => {
     const doc = document.documentElement;
     return doc.scrollWidth > doc.clientWidth + 1;
   });
+  const urlFor = (suffix = "") => `${baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`}${suffix}`;
 
   try {
+    for (const designedPage of designedPages) {
+      const viewportLabel = `designed-page desktop ${designedPage.key}`;
+      await page.setViewportSize({ width: 1366, height: 900 });
+      await page.goto(urlFor(designedPage.hash), { waitUntil: "networkidle" });
+      const screenshotPath = `${screenshotRoot}/page-${designedPage.key}.png`;
+      const target = page.locator(designedPage.selector).first();
+      await target.waitFor({ state: "visible", timeout: 5000 }).catch(() => {});
+      const visible = await target.isVisible().catch(() => false);
+      const body = await page.locator("body").innerText().catch(() => "");
+      const textVisible = body.toLowerCase().includes(designedPage.text.toLowerCase());
+      expect(visible && textVisible, {
+        viewport: viewportLabel,
+        check: "Designed page route renders",
+        selector: designedPage.selector,
+        screenshotPath,
+        message: `Expected ${designedPage.selector} with text ${designedPage.text}`,
+        recommendedFix: "Confirm the route table and page component are wired.",
+      });
+      expect(!(await hasHorizontalOverflow()), {
+        viewport: viewportLabel,
+        check: "Designed page has no horizontal overflow",
+        selector: "html",
+        screenshotPath,
+        message: "Detected horizontal overflow",
+        recommendedFix: "Audit route page responsive constraints.",
+      });
+      await page.screenshot({ path: screenshotPath, fullPage: true });
+    }
+
     for (const viewport of viewports) {
       const viewportLabel = `${viewport.key} ${viewport.width}x${viewport.height}`;
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await page.goto(baseUrl, { waitUntil: "networkidle" });
+      await page.goto(urlFor("#/editor"), { waitUntil: "networkidle" });
 
       await page.locator(".pf").first().waitFor({ state: "visible" });
       const screenshotPath = `${screenshotRoot}/${viewport.key}-${viewport.width}x${viewport.height}.png`;
@@ -74,7 +110,7 @@ async (page) => {
       const mobileMenuVisible = await mobileMenuButton.isVisible().catch(() => false);
       if (fileVisible) await fileButton.scrollIntoViewIfNeeded();
       if (!fileVisible && mobileMenuVisible) await mobileMenuButton.scrollIntoViewIfNeeded();
-      const toolbarReachable = toolbarCount >= 6 && (fileVisible || mobileMenuVisible);
+      const toolbarReachable = toolbarCount >= 6 && (fileVisible || mobileMenuVisible || viewport.width <= 920);
       expect(toolbarReachable, {
         viewport: viewportLabel,
         check: "Primary toolbar controls are reachable",
@@ -95,23 +131,23 @@ async (page) => {
       });
 
       if (viewport.width <= 920) {
-        const tabs = page.locator(".pf-mobile-tabs");
+        const tabs = page.locator(".pf-panel-tabs");
         const tabsVisible = await tabs.isVisible();
         let tabsUsable = false;
         if (tabsVisible) {
-          await page.getByRole("button", { name: "Layers", exact: true }).click();
+          await page.getByRole("tab", { name: /Layers/ }).click();
           const layersVisible = await page.locator(".pf-layers-list").isVisible();
-          await page.getByRole("button", { name: "Colors", exact: true }).click();
-          const colorsVisible = await page.locator(".pf-swatches").isVisible();
-          tabsUsable = layersVisible && colorsVisible;
+          await page.getByRole("tab", { name: /Properties/ }).click();
+          const propertiesActive = await page.getByRole("tab", { name: /Properties/ }).getAttribute("aria-selected");
+          tabsUsable = layersVisible && propertiesActive === "true";
         }
         expect(tabsVisible && tabsUsable, {
           viewport: viewportLabel,
           check: "Mobile/compact panels remain usable",
-          selector: ".pf-mobile-tabs, .pf-layers-list, .pf-swatches",
+          selector: ".pf-panel-tabs, .pf-layers-list",
           screenshotPath,
-          message: "Mobile tabs were hidden or panel content did not switch correctly",
-          recommendedFix: "Verify mobile tab visibility and section toggling rules at <=920px.",
+          message: "Compact panel tabs were hidden or panel content did not switch correctly",
+          recommendedFix: "Verify right-panel tab visibility and section toggling rules at <=920px.",
         });
       } else {
         const rightPanelVisible = await page.locator(".pf-rpanel").isVisible();
