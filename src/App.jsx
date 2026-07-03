@@ -6,6 +6,7 @@ import GuidePage from "./pages/GuidePage.jsx";
 import OnboardingPage from "./pages/OnboardingPage.jsx";
 import BrandPage from "./pages/BrandPage.jsx";
 import { getRouteFromLocation, navigateToRoute, ROUTES } from "./routes.js";
+import { setDocumentSeo } from "./seo.js";
 
 export default function App() {
   const [route, setRoute] = useState(() => getRouteFromLocation(window.location));
@@ -22,6 +23,10 @@ export default function App() {
       window.removeEventListener("pixelforge:navigate", syncRoute);
     };
   }, []);
+
+  useEffect(() => {
+    setDocumentSeo(route);
+  }, [route]);
 
   if (route === ROUTES.editor) return <PixelForge />;
   if (route === ROUTES.guide) return <GuidePage navigate={navigate} />;
