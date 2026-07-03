@@ -5,6 +5,8 @@ import {
 
 const TABS = ["HEX", "RGB", "HSL", "HSV"];
 const PANEL_W = 320;
+const SV_KEY_STEP = 0.01;
+const SV_KEY_BIG_STEP = 0.1;
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, Number(value) || 0));
@@ -83,14 +85,27 @@ export default function ColorPickerPopover({
     onChange?.(nextHex);
   };
 
-  const handleTabInputKeyDown = (event) => {
-    if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
-    const inputs = Array.from(event.currentTarget.querySelectorAll("input"));
-    const index = inputs.indexOf(document.activeElement);
-    if (index < 0) return;
+  const commitHsv = (nextS, nextV) => {
+    commit(hsvToRgb(hsv.h, clamp(nextS, 0, 1), clamp(nextV, 0, 1)));
+  };
+
+  const handleSaturationValueKeyDown = (event) => {
+    const step = event.shiftKey ? SV_KEY_BIG_STEP : SV_KEY_STEP;
+    let nextS = hsv.s;
+    let nextV = hsv.v;
+
+    if (event.key === "ArrowLeft") nextS -= step;
+    else if (event.key === "ArrowRight") nextS += step;
+    else if (event.key === "ArrowDown") nextV -= step;
+    else if (event.key === "ArrowUp") nextV += step;
+    else if (event.key === "Home") nextS = 0;
+    else if (event.key === "End") nextS = 1;
+    else if (event.key === "PageDown") nextV -= SV_KEY_BIG_STEP;
+    else if (event.key === "PageUp") nextV += SV_KEY_BIG_STEP;
+    else return;
+
     event.preventDefault();
-    const direction = event.key === "ArrowRight" ? 1 : -1;
-    inputs[(index + direction + inputs.length) % inputs.length]?.focus();
+    commitHsv(nextS, nextV);
   };
 
   const tabFields = {
@@ -139,12 +154,13 @@ export default function ColorPickerPopover({
       <div className="pf-color-picker-body">
         <div
           className="pf-color-picker-sv"
-          aria-label="Saturation value gradient"
-          role="slider"
+          aria-label={`Saturation ${Math.round(hsv.s * 100)} percent, value ${Math.round(hsv.v * 100)} percent. Use arrow keys to adjust.`}
+          role="application"
           tabIndex={0}
           style={{
             background: `linear-gradient(to top, #000, rgba(0,0,0,0)), linear-gradient(to right, #fff, ${formatHex(hsvToRgb(hsv.h, 1, 1))})`,
           }}
+          onKeyDown={handleSaturationValueKeyDown}
           onClick={event => {
             const rect = event.currentTarget.getBoundingClientRect();
             const s = clamp((event.clientX - rect.left) / rect.width, 0, 1);
@@ -165,7 +181,7 @@ export default function ColorPickerPopover({
           />
         </label>
 
-        <div className="pf-color-picker-tab-body" onKeyDown={handleTabInputKeyDown}>
+        <div className="pf-color-picker-tab-body">
           {tab === "HEX" ? (
             <label className="pf-color-picker-field">
               <span>HEX</span>

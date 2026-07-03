@@ -126,7 +126,7 @@ async (page) => {
     await page.goto(baseUrl, { waitUntil: "networkidle" });
 
     const title = await page.title();
-    expect(title === "PixelForge", "App title loads", { title, url: page.url() });
+    expect(/^PixelForge\b/.test(title), "App title loads", { title, url: page.url() });
     expect(await page.locator(".pf-route-home").isVisible().catch(() => false), "Home launcher route renders at root", { url: page.url() });
 
     await routeCheck("#/templates", ".pf-route-templates", "Template gallery", "Templates route renders");

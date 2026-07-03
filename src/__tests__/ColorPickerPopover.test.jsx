@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import ColorPickerPopover from "../components/ColorPickerPopover.jsx";
+import { formatHex, hsvToRgb, parseHex, rgbToHsv } from "../colorOps.js";
 
 function renderPicker(overrides = {}) {
   const props = {
@@ -64,5 +65,30 @@ describe("ColorPickerPopover", () => {
 
     fireEvent.pointerDown(document.body);
     expect(props.onClose).toHaveBeenCalledTimes(2);
+  });
+
+  it("adjusts saturation and value from the keyboard", () => {
+    const props = renderPicker();
+    const sv = screen.getByRole("application", { name: /saturation 67 percent, value 60 percent/i });
+    const hsv = rgbToHsv(...Object.values(parseHex("#336699")));
+
+    fireEvent.keyDown(sv, { key: "ArrowRight" });
+    expect(props.onChange).toHaveBeenLastCalledWith(formatHex(hsvToRgb(hsv.h, hsv.s + 0.01, hsv.v)));
+
+    fireEvent.keyDown(sv, { key: "ArrowUp", shiftKey: true });
+    expect(props.onChange).toHaveBeenLastCalledWith(formatHex(hsvToRgb(hsv.h, hsv.s, hsv.v + 0.1)));
+
+    fireEvent.keyDown(sv, { key: "Home" });
+    expect(props.onChange).toHaveBeenLastCalledWith(formatHex(hsvToRgb(hsv.h, 0, hsv.v)));
+
+    expect(screen.queryByRole("slider", { name: /saturation/i })).toBeNull();
+  });
+
+  it("does not hijack arrow keys while editing color inputs", () => {
+    renderPicker();
+    const hexInput = screen.getByLabelText("HEX value");
+
+    expect(fireEvent.keyDown(hexInput, { key: "ArrowLeft" })).toBe(true);
+    expect(fireEvent.keyDown(hexInput, { key: "ArrowRight" })).toBe(true);
   });
 });
