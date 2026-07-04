@@ -131,6 +131,76 @@ describe("Apple Pencil pressure", () => {
   });
 });
 
+function fingerDown(result, { x = 20, y = 20 } = {}) {
+  act(() => {
+    result.current.onDown({
+      preventDefault: vi.fn(),
+      button: 0,
+      clientX: x,
+      clientY: y,
+      pointerType: "touch",
+    });
+  });
+}
+
+function dispatchTouchStart(viewport, touches) {
+  const event = new Event("touchstart", { cancelable: true, bubbles: true });
+  Object.defineProperty(event, "touches", { value: touches });
+  act(() => { viewport.dispatchEvent(event); });
+}
+
+describe("stylus / palm handling on touch devices", () => {
+  it("still starts a one-finger pan even though the brush tool already set down=true", () => {
+    const { args } = makeBrushArgs();
+    const { result } = renderHook(() => useCanvasInteractions(args));
+
+    // On touch browsers onPointerDown runs first; a finger with the brush tool
+    // sets tsRef.current.down = true before touchstart fires.
+    fingerDown(result, { x: 20, y: 20 });
+    dispatchTouchStart(args.vpRef.current, [{ clientX: 20, clientY: 20, touchType: "direct" }]);
+
+    expect(args.setIsPanning).toHaveBeenCalledWith(true);
+    expect(args.panningRef.current).toBe(true);
+  });
+
+  it("still starts a two-finger pinch for non-stylus touches", () => {
+    const { args } = makeBrushArgs();
+    const { result } = renderHook(() => useCanvasInteractions(args));
+
+    fingerDown(result, { x: 20, y: 20 });
+    dispatchTouchStart(args.vpRef.current, [
+      { clientX: 10, clientY: 10, touchType: "direct" },
+      { clientX: 40, clientY: 40, touchType: "direct" },
+    ]);
+
+    expect(args.setIsPanning).toHaveBeenCalledWith(true);
+    expect(args.panningRef.current).toBe(true);
+  });
+
+  it("rejects a stray finger/palm touch while a pen stroke is active", () => {
+    const { args } = makeBrushArgs();
+    const { result } = renderHook(() => useCanvasInteractions(args));
+
+    // Pen goes down first (penDown = true), then a palm lands as a finger touch.
+    penDown(result, 0.5);
+    dispatchTouchStart(args.vpRef.current, [{ clientX: 60, clientY: 60, touchType: "direct" }]);
+
+    expect(args.setIsPanning).not.toHaveBeenCalledWith(true);
+    expect(args.panningRef.current).toBe(false);
+  });
+
+  it("ignores the Pencil's own stylus touch so it draws instead of panning", () => {
+    const { args } = makeBrushArgs();
+    const { result } = renderHook(() => useCanvasInteractions(args));
+
+    penDown(result, 0.5);
+    dispatchTouchStart(args.vpRef.current, [{ clientX: 20, clientY: 20, touchType: "stylus" }]);
+
+    expect(args.setIsPanning).not.toHaveBeenCalledWith(true);
+    expect(args.panningRef.current).toBe(false);
+  });
+});
+
 describe("useCanvasInteractions", () => {
   it("picks the primary color from the canvas with the eyedropper tool", () => {
     const args = makeArgs();
