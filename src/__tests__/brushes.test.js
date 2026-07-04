@@ -5,6 +5,7 @@ import {
   stampBrush,
   drawBrushSegment,
   getEffectiveRadius,
+  pressureSize,
 } from "../brushes.js";
 
 function makeRecordingCtx() {
@@ -107,6 +108,72 @@ describe("drawBrushSegment", () => {
     const arcCount = calls.filter(c => c.name === "arc").length;
     // a single stamp at start and end (both at same point) — still calls arc
     expect(arcCount).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("pressureSize", () => {
+  it("leaves size untouched when pressure is null (mouse / finger)", () => {
+    expect(pressureSize(20, null)).toBe(20);
+  });
+
+  it("paints the full size at maximum pressure", () => {
+    expect(pressureSize(20, 1)).toBe(20);
+  });
+
+  it("tapers to ~30% of size at zero pressure", () => {
+    expect(pressureSize(20, 0)).toBeCloseTo(6, 5);
+  });
+
+  it("scales monotonically between light and firm pressure", () => {
+    expect(pressureSize(20, 0.25)).toBeLessThan(pressureSize(20, 0.75));
+  });
+
+  it("clamps out-of-range pressure values", () => {
+    expect(pressureSize(20, 2)).toBe(20);
+    expect(pressureSize(20, -1)).toBeCloseTo(6, 5);
+  });
+
+  it("never returns a sub-pixel radius", () => {
+    expect(pressureSize(0.2, 0)).toBe(0.5);
+  });
+});
+
+describe("pressure-modulated stamping", () => {
+  const captureRadius = () => {
+    const radii = [];
+    const ctx = {
+      globalAlpha: 1,
+      globalCompositeOperation: "source-over",
+      fillStyle: "#000",
+      imageSmoothingEnabled: true,
+      save() {}, restore() {}, beginPath() {},
+      arc: (_x, _y, r) => radii.push(r),
+      ellipse() {}, fill() {},
+    };
+    return { ctx, radii };
+  };
+
+  it("stampBrush draws a smaller arc under light pen pressure", () => {
+    const firm = captureRadius();
+    const light = captureRadius();
+    stampBrush(firm.ctx, "soft", 10, 10, 20, "#f00", 1, false, 1);
+    stampBrush(light.ctx, "soft", 10, 10, 20, "#f00", 1, false, 0.1);
+    expect(light.radii[0]).toBeLessThan(firm.radii[0]);
+  });
+
+  it("stampBrush with null pressure matches the unmodulated radius", () => {
+    const withNull = captureRadius();
+    const full = captureRadius();
+    stampBrush(withNull.ctx, "soft", 10, 10, 20, "#f00", 1, false, null);
+    stampBrush(full.ctx, "soft", 10, 10, 20, "#f00", 1, false, 1);
+    expect(withNull.radii[0]).toBe(full.radii[0]);
+  });
+
+  it("drawBrushSegment ramps radius from start to end pressure", () => {
+    const { ctx, radii } = captureRadius();
+    drawBrushSegment(ctx, "soft", 0, 0, 100, 0, 20, "#f00", 1, false, 0, 1);
+    expect(radii.length).toBeGreaterThan(2);
+    expect(radii[0]).toBeLessThan(radii[radii.length - 1]);
   });
 });
 

@@ -15,6 +15,7 @@ PixelForge is a lightweight browser-based drawing surface that mixes raster pain
 - IndexedDB autosave with draft recovery
 - Keyboard shortcuts for every tool
 - Mobile/compact UI for small viewports
+- Apple Pencil / stylus input with pressure-sensitive brushes and palm rejection
 
 ## Browser support
 

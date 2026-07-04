@@ -177,6 +177,7 @@ export default function useCanvasInteractions({
     tracker.startShape = null;
     tracker.moved = false;
     tracker.strokeBounds = null;
+    tracker.pressure = null;
 
     const layer = docRef.current.layers[activeId];
     if (!layer) return;
@@ -204,7 +205,8 @@ export default function useCanvasInteractions({
         maxX: startX + effRadius,
         maxY: startY + effRadius,
       };
-      stampBrush(ctx, brushPreset, startX, startY, brushSize, color1, brushOpacity, tool === "eraser");
+      tracker.pressure = event.pointerType === "pen" ? event.pressure : null;
+      stampBrush(ctx, brushPreset, startX, startY, brushSize, color1, brushOpacity, tool === "eraser", tracker.pressure);
       bump();
       return;
     }
@@ -440,7 +442,9 @@ export default function useCanvasInteractions({
         const y0 = tracker.ly - layer.oy;
         const x1 = point.x - layer.ox;
         const y1 = point.y - layer.oy;
-        drawBrushSegment(layer.canvas.getContext("2d"), brushPreset, x0, y0, x1, y1, brushSize, color1, brushOpacity, tool === "eraser");
+        const pressure = event.pointerType === "pen" ? event.pressure : null;
+        drawBrushSegment(layer.canvas.getContext("2d"), brushPreset, x0, y0, x1, y1, brushSize, color1, brushOpacity, tool === "eraser", tracker.pressure, pressure);
+        tracker.pressure = pressure;
         if (tracker.strokeBounds) {
           const effRadius = getEffectiveRadius(brushPreset, brushSize);
           tracker.strokeBounds.minX = Math.min(tracker.strokeBounds.minX, x0 - effRadius, x1 - effRadius);
@@ -694,7 +698,16 @@ export default function useCanvasInteractions({
     });
     const touchDistance = (touches) => dist(touches[0].clientX, touches[0].clientY, touches[1].clientX, touches[1].clientY);
 
+    const isStylus = (touch) => touch?.touchType === "stylus";
+
     const start = (event) => {
+      // Apple Pencil (and other styluses) also drive the pointer-event path with
+      // pointerType "pen", where they draw. Ignore their touch-event mirror here
+      // so a Pencil stroke isn't hijacked into a pan. Skipping stylus touches —
+      // and any finger/palm touch while a pen stroke is already active — also
+      // gives palm rejection for free.
+      if (Array.from(event.touches).some(isStylus)) return;
+      if (tsRef.current.down) return;
       if (event.touches.length === 1) {
         event.preventDefault();
         const touch = event.touches[0];
@@ -773,7 +786,7 @@ export default function useCanvasInteractions({
       viewport.removeEventListener("touchend", end);
       viewport.removeEventListener("touchcancel", end);
     };
-  }, [cvRef, pan, panningRef, setIsPanning, setPan, setZoom, vpRef, zoom]);
+  }, [cvRef, pan, panningRef, setIsPanning, setPan, setZoom, tsRef, vpRef, zoom]);
 
   return {
     getHandleAtPoint,

@@ -53,6 +53,84 @@ function makeArgs(overrides = {}) {
   };
 }
 
+function makeBrushArgs(overrides = {}) {
+  const arcRadii = [];
+  const layerCtx = {
+    globalAlpha: 1,
+    globalCompositeOperation: "source-over",
+    fillStyle: "#000",
+    imageSmoothingEnabled: true,
+    save() {}, restore() {}, beginPath() {},
+    arc: (_x, _y, r) => arcRadii.push(r),
+    fill() {},
+  };
+  const layer = {
+    id: "layer-1",
+    type: "raster",
+    ox: 0,
+    oy: 0,
+    canvas: { width: 100, height: 100, getContext: () => layerCtx },
+  };
+  const args = makeArgs({
+    tool: "brush",
+    brushPreset: "soft",
+    docRef: { current: { layers: { "layer-1": layer }, order: ["layer-1"] } },
+    capturePatchSnapshot: vi.fn(() => ({ layers: [] })),
+    ...overrides,
+  });
+  return { args, arcRadii };
+}
+
+function penDown(result, pressure) {
+  act(() => {
+    result.current.onDown({
+      preventDefault: vi.fn(),
+      button: 0,
+      clientX: 20,
+      clientY: 20,
+      pointerType: "pen",
+      pressure,
+    });
+  });
+}
+
+describe("Apple Pencil pressure", () => {
+  it("paints a smaller stamp for a light pen press than a firm one", () => {
+    const light = makeBrushArgs();
+    const firm = makeBrushArgs();
+    const { result: lightHook } = renderHook(() => useCanvasInteractions(light.args));
+    const { result: firmHook } = renderHook(() => useCanvasInteractions(firm.args));
+
+    penDown(lightHook, 0.1);
+    penDown(firmHook, 1);
+
+    expect(light.arcRadii[0]).toBeGreaterThan(0);
+    expect(light.arcRadii[0]).toBeLessThan(firm.arcRadii[0]);
+  });
+
+  it("ignores pressure for a mouse (non-pen) pointer", () => {
+    const pen = makeBrushArgs();
+    const mouse = makeBrushArgs();
+    const { result: penHook } = renderHook(() => useCanvasInteractions(pen.args));
+    const { result: mouseHook } = renderHook(() => useCanvasInteractions(mouse.args));
+
+    penDown(penHook, 1);
+    act(() => {
+      mouseHook.current.onDown({
+        preventDefault: vi.fn(),
+        button: 0,
+        clientX: 20,
+        clientY: 20,
+        pointerType: "mouse",
+        pressure: 0.1,
+      });
+    });
+
+    // Mouse ignores the low pressure value and paints at full size, matching a firm pen.
+    expect(mouse.arcRadii[0]).toBe(pen.arcRadii[0]);
+  });
+});
+
 describe("useCanvasInteractions", () => {
   it("picks the primary color from the canvas with the eyedropper tool", () => {
     const args = makeArgs();

@@ -11,6 +11,18 @@ export function getPreset(id) {
   return BRUSH_PRESETS.find(p => p.id === id) || BRUSH_PRESETS[0];
 }
 
+// Map a normalized pen pressure (0–1) onto an effective brush size. A firm
+// press paints the full configured size; a light touch tapers down to ~30%
+// so Apple Pencil strokes swell and thin naturally. `pressure == null` (mouse,
+// finger, or any device that does not report force) leaves the size untouched.
+const MIN_PRESSURE_SCALE = 0.3;
+
+export function pressureSize(size, pressure) {
+  if (pressure == null) return size;
+  const clamped = Math.max(0, Math.min(1, pressure));
+  return Math.max(0.5, size * (MIN_PRESSURE_SCALE + (1 - MIN_PRESSURE_SCALE) * clamped));
+}
+
 function stampSoft(ctx, x, y, size, color, opacity, erase) {
   ctx.save();
   ctx.globalAlpha = opacity;
@@ -79,19 +91,24 @@ const STAMPERS = {
   marker: stampMarker,
 };
 
-export function stampBrush(ctx, presetId, x, y, size, color, opacity, erase) {
-  (STAMPERS[presetId] || stampSoft)(ctx, x, y, size, color, opacity, erase);
+export function stampBrush(ctx, presetId, x, y, size, color, opacity, erase, pressure = null) {
+  (STAMPERS[presetId] || stampSoft)(ctx, x, y, pressureSize(size, pressure), color, opacity, erase);
 }
 
-export function drawBrushSegment(ctx, presetId, x0, y0, x1, y1, size, color, opacity, erase) {
+export function drawBrushSegment(ctx, presetId, x0, y0, x1, y1, size, color, opacity, erase, pressure0 = null, pressure1 = null) {
   const preset = getPreset(presetId);
   const distance = dist(x0, y0, x1, y1);
+  // Spacing follows the full configured size so stamp density stays stable
+  // even as pressure tapers the per-stamp radius.
   const step = Math.max(0.5, size * preset.spacing);
   const steps = Math.max(1, Math.ceil(distance / step));
   const stamp = STAMPERS[presetId] || stampSoft;
+  const startPressure = pressure0;
+  const endPressure = pressure1 == null ? pressure0 : pressure1;
   for (let index = 0; index <= steps; index += 1) {
     const t = index / steps;
-    stamp(ctx, lerp(x0, x1, t), lerp(y0, y1, t), size, color, opacity, erase);
+    const pressure = startPressure == null ? null : lerp(startPressure, endPressure, t);
+    stamp(ctx, lerp(x0, x1, t), lerp(y0, y1, t), pressureSize(size, pressure), color, opacity, erase);
   }
 }
 
