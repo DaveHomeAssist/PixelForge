@@ -166,6 +166,7 @@ export default function useCanvasInteractions({
     const point = screenToDoc(event.clientX, event.clientY);
     const tracker = tsRef.current;
     tracker.down = true;
+    tracker.penDown = event.pointerType === "pen";
     tracker.sx = point.x;
     tracker.sy = point.y;
     tracker.lx = point.x;
@@ -642,6 +643,7 @@ export default function useCanvasInteractions({
     tracker.historyBefore = null;
     tracker.moved = false;
     tracker.strokeBounds = null;
+    tracker.penDown = false;
     bump();
   }, [
     activeId,
@@ -703,11 +705,14 @@ export default function useCanvasInteractions({
     const start = (event) => {
       // Apple Pencil (and other styluses) also drive the pointer-event path with
       // pointerType "pen", where they draw. Ignore their touch-event mirror here
-      // so a Pencil stroke isn't hijacked into a pan. Skipping stylus touches —
-      // and any finger/palm touch while a pen stroke is already active — also
-      // gives palm rejection for free.
+      // so a Pencil stroke isn't hijacked into a pan.
       if (Array.from(event.touches).some(isStylus)) return;
-      if (tsRef.current.down) return;
+      // Reject stray finger/palm touches only while a *pen* stroke is active —
+      // that's palm rejection. On touch browsers onPointerDown runs before this
+      // listener, so an ordinary finger already set tsRef.current.down via a
+      // brush/move/shape tool; guarding on `down` alone would wrongly skip
+      // one-finger pan and two-finger pinch for those fingers.
+      if (tsRef.current.down && tsRef.current.penDown) return;
       if (event.touches.length === 1) {
         event.preventDefault();
         const touch = event.touches[0];
