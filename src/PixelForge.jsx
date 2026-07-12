@@ -991,7 +991,7 @@ export default function PixelForge() {
     const record = findShapeRecord();
     if (!record || !canEditLayer(record.layer, "reorder this shape")) return;
     const shapes = record.layer.shapes;
-    let target = record.index;
+    let target;
     if (direction === "front") target = shapes.length - 1;
     else if (direction === "back") target = 0;
     else target = clamp(record.index + direction, 0, shapes.length - 1);
