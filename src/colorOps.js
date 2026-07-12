@@ -39,9 +39,9 @@ export function hslToRgb(h, s, l) {
   const c = (1 - Math.abs(2 * light - 1)) * sat;
   const x = c * (1 - Math.abs(((hue / 60) % 2) - 1));
   const m = light - c / 2;
-  let rr = 0;
-  let gg = 0;
-  let bb = 0;
+  let rr;
+  let gg;
+  let bb;
 
   if (hue < 60) [rr, gg, bb] = [c, x, 0];
   else if (hue < 120) [rr, gg, bb] = [x, c, 0];
@@ -88,9 +88,9 @@ export function hsvToRgb(h, s, v) {
   const c = value * sat;
   const x = c * (1 - Math.abs(((hue / 60) % 2) - 1));
   const m = value - c;
-  let rr = 0;
-  let gg = 0;
-  let bb = 0;
+  let rr;
+  let gg;
+  let bb;
 
   if (hue < 60) [rr, gg, bb] = [c, x, 0];
   else if (hue < 120) [rr, gg, bb] = [x, c, 0];
