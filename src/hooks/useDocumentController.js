@@ -14,6 +14,7 @@ import {
   createDefaultDocument, buildProjectPayload, hydrateProject, hydrateDraftPayload,
 } from "../serialization.js";
 import { saveProjectPayload, supportsFileSave } from "../projectFiles.js";
+import { hasAnthropicKey, hasProviderKey } from "../ai/storage.js";
 import { createRasterLayerFromImage } from "../imageImport.js";
 
 export default function useDocumentController({
@@ -185,8 +186,7 @@ export default function useDocumentController({
     try {
       let hasBrowserKeys = false;
       try {
-        const raw = window.localStorage.getItem("PixelForge.ai.v1");
-        hasBrowserKeys = !!raw && (raw.includes("anthropicKey") || raw.includes("providerKey"));
+        hasBrowserKeys = hasAnthropicKey() || hasProviderKey();
       } catch {
         hasBrowserKeys = false;
       }
@@ -195,11 +195,11 @@ export default function useDocumentController({
         setSaveHandle(result.handle);
         markClean();
         triggerFeedback("save", "success");
-        flash(hasBrowserKeys ? "Project saved. AI keys stay in this browser." : "Project saved", "success", hasBrowserKeys ? 3600 : 2000);
+        flash(hasBrowserKeys ? "Project saved. AI keys stay in this browser tab." : "Project saved", "success", hasBrowserKeys ? 3600 : 2000);
         return;
       }
       triggerFeedback("save", "success");
-      flash(hasBrowserKeys ? "Project downloaded. AI keys stay in this browser." : "Project downloaded. Browser fallback does not mark the project as saved.", "success", hasBrowserKeys ? 3600 : 2600);
+      flash(hasBrowserKeys ? "Project downloaded. AI keys stay in this browser tab." : "Project downloaded. Browser fallback does not mark the project as saved.", "success", hasBrowserKeys ? 3600 : 2600);
     } catch (err) {
       triggerFeedback("save", "error");
       flash("Save error: " + err.message, "error");

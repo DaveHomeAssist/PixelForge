@@ -8,6 +8,7 @@ export default function AISettingsModal({ onClose, onSaved }) {
   const [anthropicKey, setAnthropicKey] = useState(initial.anthropicKey || "");
   const [providerId, setProviderId] = useState(initial.providerId || DEFAULT_PROVIDER_ID);
   const [providerKey, setProviderKey] = useState(initial.providerKey || "");
+  const [providerProxyUrl, setProviderProxyUrl] = useState(initial.providerProxyUrl || "");
   const containerRef = useRef(null);
 
   // Mounted only while open (parent gates render); trap is active for the
@@ -19,6 +20,7 @@ export default function AISettingsModal({ onClose, onSaved }) {
       anthropicKey: anthropicKey.trim(),
       providerId,
       providerKey: providerKey.trim(),
+      providerProxyUrl: providerProxyUrl.trim(),
     });
     onSaved?.();
     onClose?.();
@@ -28,6 +30,7 @@ export default function AISettingsModal({ onClose, onSaved }) {
     clearApiConfig();
     setAnthropicKey("");
     setProviderKey("");
+    setProviderProxyUrl("");
     onSaved?.();
   };
 
@@ -48,7 +51,8 @@ export default function AISettingsModal({ onClose, onSaved }) {
         </div>
         <div className="pf-modal-body">
           <p className="pf-field-help">
-            Keys are stored in your browser's local storage. They are not included in saved project files.
+            Keys are stored in this tab's session storage and are cleared when the tab
+            closes. They are not included in saved project files.
           </p>
 
           <div className="pf-prop-row">
@@ -87,6 +91,26 @@ export default function AISettingsModal({ onClose, onSaved }) {
               />
             </div>
           </div>
+
+          <div className="pf-prop-row">
+            <span className="pf-prop-label">CORS proxy URL</span>
+            <div className="pf-prop-val">
+              <input
+                type="text"
+                value={providerProxyUrl}
+                onChange={e => setProviderProxyUrl(e.target.value)}
+                placeholder="https://replicate-proxy.example.workers.dev"
+                aria-label="Provider CORS proxy URL"
+                style={{ width: "100%" }}
+              />
+            </div>
+          </div>
+          <p className="pf-field-help">
+            Replicate's API blocks direct browser calls (no CORS headers). Requests are sent
+            through this proxy, which must forward them to api.replicate.com and add CORS
+            headers. Your provider key passes through the proxy, so only use one you run
+            yourself.
+          </p>
 
           <div className="pf-modal-actions" style={{ marginTop: 16, display: "flex", gap: 8, justifyContent: "flex-end" }}>
             <button type="button" className="pf-chip-btn" onClick={clear}>Clear keys</button>

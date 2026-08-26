@@ -24,6 +24,7 @@ export async function generateLayer(rawPrompt, { aspect = "1:1", signal, onProgr
     negativePrompt: refined.negativePrompt,
     aspect: refined.aspect || aspect,
     apiKey: config.providerKey,
+    apiBase: config.providerProxyUrl,
     signal,
     onProgress,
   });
@@ -43,6 +44,7 @@ export async function generateInpaint(rawPrompt, baseImage, maskImage, { signal,
     baseImage,
     maskImage,
     apiKey: config.providerKey,
+    apiBase: config.providerProxyUrl,
     signal,
     onProgress,
   });

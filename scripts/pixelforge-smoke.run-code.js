@@ -19,6 +19,7 @@ async (page) => {
       }
       try {
         window.localStorage.removeItem("PixelForge.ai.v1");
+        window.sessionStorage.removeItem("PixelForge.ai.v1");
         window.localStorage.removeItem("PixelForge.autosave.v3");
       } catch {
         // Storage is best-effort setup only.

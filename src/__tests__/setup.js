@@ -28,26 +28,31 @@ if (!window.matchMedia) {
 // missing (likely because of the `--localstorage-file` warning preventing the
 // real store from initializing). Provide a simple in-memory shim.
 (() => {
-  const store = new Map();
-  const ls = {
-    get length() { return store.size; },
-    key(i) { return Array.from(store.keys())[i] ?? null; },
-    getItem(k) { return store.has(String(k)) ? store.get(String(k)) : null; },
-    setItem(k, v) { store.set(String(k), String(v)); },
-    removeItem(k) { store.delete(String(k)); },
-    clear() { store.clear(); },
+  const makeStorage = () => {
+    const store = new Map();
+    return {
+      get length() { return store.size; },
+      key(i) { return Array.from(store.keys())[i] ?? null; },
+      getItem(k) { return store.has(String(k)) ? store.get(String(k)) : null; },
+      setItem(k, v) { store.set(String(k), String(v)); },
+      removeItem(k) { store.delete(String(k)); },
+      clear() { store.clear(); },
+    };
   };
-  Object.defineProperty(window, "localStorage", {
-    configurable: true,
-    writable: true,
-    value: ls,
-  });
-  if (typeof globalThis !== "undefined") {
-    Object.defineProperty(globalThis, "localStorage", {
+  for (const name of ["localStorage", "sessionStorage"]) {
+    const shim = makeStorage();
+    Object.defineProperty(window, name, {
       configurable: true,
       writable: true,
-      value: ls,
+      value: shim,
     });
+    if (typeof globalThis !== "undefined") {
+      Object.defineProperty(globalThis, name, {
+        configurable: true,
+        writable: true,
+        value: shim,
+      });
+    }
   }
 })();
 

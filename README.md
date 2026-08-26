@@ -48,7 +48,9 @@ Deployment to GitHub Pages is handled by `.github/workflows/deploy-pages.yml` af
 
 ## Security notes
 
-AI provider keys are stored in browser `localStorage` on this device. They are not written into `.pforge` project files or autosave drafts, but any JavaScript running on the PixelForge origin can read them. Use keys with narrow permissions and rotate them if the browser profile or deployed origin is compromised.
+AI provider keys are stored in browser `sessionStorage`, scoped to the current tab and cleared when it closes. They are not written into `.pforge` project files or autosave drafts. GitHub Pages serves every project on an account from a single origin, so origin-wide `localStorage` is deliberately avoided for keys (any sibling deployment could read it); a legacy `localStorage` copy is migrated into session storage and removed on first use. Any JavaScript running on the origin during the session can still read the keys, so use keys with narrow permissions and rotate them if the browser profile or deployed origin is compromised.
+
+Replicate's API does not send CORS headers, so live image generation from the browser requires a user-supplied CORS proxy (set in AI Settings) that forwards requests to `api.replicate.com`. Run the proxy yourself — the provider key transits it.
 
 Google Fonts are loaded from Google-hosted CSS. Subresource integrity is not applied because Google rotates that stylesheet; self-host fonts if this moves into a stricter production environment.
 
