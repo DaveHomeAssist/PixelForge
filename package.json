@@ -20,7 +20,7 @@
     "ci": "node scripts/verify-runtime.mjs && npm run lint && npm run test && npm run build && npm run budget"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.95.2",
+    "@anthropic-ai/sdk": "^0.112.4",
     "lucide-react": "^1.24.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
