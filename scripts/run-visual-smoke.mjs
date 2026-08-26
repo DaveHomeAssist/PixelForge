@@ -2,7 +2,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
@@ -51,7 +51,31 @@ function startPreviewServer() {
     shell: process.platform === "win32",
     stdio: "inherit",
     env: process.env,
+    // POSIX: own process group so cleanup can kill npm -> sh -> vite together.
+    detached: process.platform !== "win32",
   });
+}
+
+function stopPreviewServer(server) {
+  if (!server || server.exitCode !== null) return;
+  if (process.platform === "win32") {
+    // server.kill only reaches the wrapper shell; kill the whole tree.
+    spawnSync("taskkill", ["/PID", String(server.pid), "/T", "/F"], { stdio: "ignore" });
+  } else {
+    try {
+      process.kill(-server.pid, "SIGTERM");
+    } catch {
+      server.kill("SIGTERM");
+    }
+  }
+}
+
+async function closePlaywrightSession() {
+  try {
+    await run("npx", ["--yes", "--package", "@playwright/cli", "playwright-cli", "-s", session, "close"], { capture: true });
+  } catch (error) {
+    console.warn(`[visual-smoke] Could not close Playwright session ${session}: ${error.message}`);
+  }
 }
 
 async function waitForServer(maxAttempts = 100) {
@@ -68,9 +92,12 @@ async function waitForServer(maxAttempts = 100) {
 }
 
 function parseVisualResult(stdout) {
-  const line = stdout.split(/\r?\n/).map(item => item.trim()).find(item => item.startsWith(marker));
-  if (!line) return JSON.parse(stdout);
-  return JSON.parse(line.slice(marker.length));
+  const lines = stdout.split(/\r?\n/).map(item => item.trim());
+  const line = lines.find(item => item.startsWith(marker));
+  if (line) return JSON.parse(line.slice(marker.length));
+  const jsonLine = lines.find(item => item.startsWith("{") && item.includes('"failures"'));
+  if (jsonLine) return JSON.parse(jsonLine);
+  throw new Error("Visual smoke result marker not found in Playwright output.");
 }
 
 async function main() {
@@ -93,7 +120,7 @@ async function main() {
     console.log("[visual-smoke] Executing visual run-code script...");
     const execution = await run(
       "npx",
-      ["--yes", "--package", "@playwright/cli", "playwright-cli", "-s", session, "run-code", "--filename", codePath, "--raw"],
+      ["--yes", "--package", "@playwright/cli", "playwright-cli", "-s", session, "run-code", "--filename", codePath],
       {
         capture: true,
         env: {
@@ -122,9 +149,8 @@ async function main() {
       console.log(`[PASS] ${check.viewport} | ${check.check} | ${check.selector} | ${check.screenshotPath}`);
     }
   } finally {
-    if (server && !server.killed) {
-      server.kill("SIGTERM");
-    }
+    await closePlaywrightSession();
+    stopPreviewServer(server);
   }
 }
 
