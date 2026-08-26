@@ -104,3 +104,25 @@ Phase   Description                     Status       Effort    Impact
   4A    Decompose PixelForge.jsx         COMPLETED    —         Medium
   4B    useCallback inline functions     COMPLETED    —         Low
   5A    Fix 5 pre-existing test fails    COMPLETED    —         Medium
+
+
+================================================================================
+AUDIT REMEDIATION — 2026-08-26                          COMPLETED
+================================================================================
+
+H-1/H-2. Replicate CORS + key storage                          COMPLETED
+    - Surfaced Replicate's missing CORS headers via a user-supplied
+      proxy setting in AI Settings; documented in README Security notes
+    - AI provider keys moved to sessionStorage (tab-scoped, cleared on
+      close); legacy localStorage copy migrated and removed on first use
+    - Commit: c5ee034
+
+M-1. Bounded .pforge hydration                                 COMPLETED
+    - Imported .pforge hydration is bounded against hostile payloads
+      (src/serialization.js + serialization tests)
+    - Commit: 2d5976b
+
+M-2. npm audit CI gate                                         COMPLETED
+    - Cleared npm audit advisories; CI now gates on
+      npm audit --audit-level=moderate in .github/workflows/ci.yml
+    - Commit: 6f69a7e
