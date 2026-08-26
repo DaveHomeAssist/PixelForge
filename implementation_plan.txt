@@ -126,3 +126,24 @@ M-2. npm audit CI gate                                         COMPLETED
     - Cleared npm audit advisories; CI now gates on
       npm audit --audit-level=moderate in .github/workflows/ci.yml
     - Commit: 6f69a7e
+
+M-3. Visual smoke runner repaired                              COMPLETED
+    - Dropped the unsupported --raw flag from the playwright-cli
+      run-code invocation and hardened result parsing (marker line
+      with a bare-JSON fallback, explicit error when absent)
+    - Cleanup now closes the playwright-cli session and kills the
+      preview server's full process tree (taskkill /T /F on Windows,
+      process-group SIGTERM on POSIX), so failures no longer leave
+      the preview child or Playwright daemon alive
+    - Verified locally: 30/30 viewport checks pass, report.json and
+      screenshots written, no leaked vite/daemon processes after exit
+
+M-4. Browser + post-deploy CI release gates                    COMPLETED
+    - CI now runs the visual smoke (npm run smoke:visual) as a gate
+      after the bundle budget and uploads its screenshots/report as
+      a workflow artifact
+    - deploy-pages.yml gained a post-deploy health job that fetches
+      the published page and its hashed script/stylesheet assets
+      via scripts/check-deploy-health.mjs (npm run check:deploy)
+    - Verified locally against the live origin: page, script, and
+      stylesheet all pass
