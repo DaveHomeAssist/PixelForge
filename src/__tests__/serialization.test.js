@@ -44,6 +44,47 @@ describe("buildProjectPayload + hydrateProject round-trip", () => {
     await expect(hydrateProject(null)).rejects.toThrow();
   });
 
+  it("rejects out-of-range canvas dimensions", async () => {
+    const base = { v: 3, aid: "r1", layers: [{ id: "r1", type: "raster" }] };
+    await expect(hydrateProject({ ...base, w: 100000, h: 100 })).rejects.toThrow("Bad format");
+    await expect(hydrateProject({ ...base, w: 100, h: -5 })).rejects.toThrow("Bad format");
+    await expect(hydrateProject({ ...base, w: "huge", h: 100 })).rejects.toThrow("Bad format");
+  });
+
+  it("rejects excessive layer and shape counts", async () => {
+    const manyLayers = {
+      v: 3, w: 64, h: 64, aid: "r1",
+      layers: Array.from({ length: 257 }, (_, i) => ({ id: `r${i}`, type: "raster" })),
+    };
+    await expect(hydrateProject(manyLayers)).rejects.toThrow("Bad format");
+
+    const manyShapes = {
+      v: 3, w: 64, h: 64, aid: "v1",
+      layers: [{ id: "v1", type: "vector", shapes: Array.from({ length: 10001 }, (_, i) => ({ id: `s${i}` })) }],
+    };
+    await expect(hydrateProject(manyShapes)).rejects.toThrow("Bad format");
+  });
+
+  it("rejects raster data that is not a data:image URL", async () => {
+    const bad = {
+      v: 3, w: 64, h: 64, aid: "r1",
+      layers: [{ id: "r1", type: "raster", data: "https://evil.example/x.png" }],
+    };
+    await expect(hydrateProject(bad)).rejects.toThrow("Bad format");
+  });
+
+  it("clamps hostile layer offsets and truncates oversized text", async () => {
+    const project = {
+      v: 3, w: 64, h: 64, aid: "t1",
+      layers: [{ id: "t1", type: "text", text: "x".repeat(30000), ox: 1e12, oy: -1e12 }],
+    };
+    const hydrated = await hydrateProject(project);
+    const layer = hydrated.doc.layers.t1;
+    expect(layer.text).toHaveLength(20000);
+    expect(layer.ox).toBe(65536);
+    expect(layer.oy).toBe(-65536);
+  });
+
   it("round-trips a text layer through v3", async () => {
     const { doc, activeId } = createDefaultDocument(200, 200);
     const textLayer = {

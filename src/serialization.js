@@ -1,5 +1,30 @@
 import { DEFAULT_W, DEFAULT_H, DEFAULT_BG } from "./constants.js";
-import { uid, makeCanvas, cloneShapes } from "./utils.js";
+import { uid, makeCanvas, cloneShapes, clamp } from "./utils.js";
+
+// Hydration limits. The resize/new-document UI already caps canvases at 8192,
+// but imported .pforge files bypass the UI, so hydration enforces the same
+// ceiling plus sane bounds on payload size to keep an untrusted or corrupt
+// project from exhausting the tab.
+const MAX_DOC_DIM = 8192;
+const MAX_LAYERS = 256;
+const MAX_SHAPES_PER_LAYER = 10000;
+const MAX_TEXT_CHARS = 20000;
+const MAX_LAYER_OFFSET = 65536;
+const MAX_RASTER_DATA_CHARS = 64 * 1024 * 1024; // ~48MB of base64 image data
+
+function toDocDim(value, fallback) {
+  const n = Math.round(Number(value || fallback));
+  if (!Number.isFinite(n) || n < 1 || n > MAX_DOC_DIM) {
+    throw new Error(`Bad format: canvas dimensions must be 1-${MAX_DOC_DIM}`);
+  }
+  return n;
+}
+
+function toLayerOffset(value) {
+  const n = Number(value) || 0;
+  if (!Number.isFinite(n)) return 0;
+  return clamp(n, -MAX_LAYER_OFFSET, MAX_LAYER_OFFSET);
+}
 
 export function createDefaultDocument(w, h, bgColor = DEFAULT_BG) {
   const bg = {
@@ -129,7 +154,10 @@ export async function buildDraftPayload(editorDoc, docW, docH, activeId, selecte
 }
 
 function normalizeProjectForRead(data, options = {}) {
-  if (!data || !data.layers) throw new Error("Bad format");
+  if (!data || !Array.isArray(data.layers)) throw new Error("Bad format");
+  if (data.layers.length > MAX_LAYERS) {
+    throw new Error(`Bad format: more than ${MAX_LAYERS} layers`);
+  }
   const version = data.v ?? (options.serializationV2 ? 1 : null);
   if (version !== 1 && version !== 2 && version !== 3) throw new Error("Bad format");
   if (!options.serializationV2) return { data, version, guides: null, viewPrefs: null };
@@ -149,8 +177,8 @@ function normalizeProjectForRead(data, options = {}) {
 export async function hydrateProject(data, options = {}) {
   const normalized = normalizeProjectForRead(data, options);
   const projectData = normalized.data;
-  const width = projectData.w || DEFAULT_W;
-  const height = projectData.h || DEFAULT_H;
+  const width = toDocDim(projectData.w, DEFAULT_W);
+  const height = toDocDim(projectData.h, DEFAULT_H);
   const nextDoc = { layers: {}, order: [] };
   if (options.serializationV2) {
     nextDoc.guides = normalized.guides;
@@ -172,10 +200,16 @@ export async function hydrateProject(data, options = {}) {
         maskEnabled: !!rawLayer.maskEnabled,
         clipToBelow: !!rawLayer.clipToBelow,
         canvas: makeCanvas(width, height),
-        ox: rawLayer.ox || 0,
-        oy: rawLayer.oy || 0,
+        ox: toLayerOffset(rawLayer.ox),
+        oy: toLayerOffset(rawLayer.oy),
       };
       if (rawLayer.data) {
+        if (typeof rawLayer.data !== "string" || !rawLayer.data.startsWith("data:image/")) {
+          throw new Error("Bad format: raster layer data must be a data:image URL");
+        }
+        if (rawLayer.data.length > MAX_RASTER_DATA_CHARS) {
+          throw new Error("Bad format: raster layer image data is too large");
+        }
         const img = new window.Image();
         await new Promise((resolve, reject) => {
           img.onload = resolve;
@@ -201,9 +235,9 @@ export async function hydrateProject(data, options = {}) {
         effect: rawLayer.effect || null,
         maskEnabled: !!rawLayer.maskEnabled,
         clipToBelow: !!rawLayer.clipToBelow,
-        ox: rawLayer.ox || 0,
-        oy: rawLayer.oy || 0,
-        text: rawLayer.text ?? "",
+        ox: toLayerOffset(rawLayer.ox),
+        oy: toLayerOffset(rawLayer.oy),
+        text: String(rawLayer.text ?? "").slice(0, MAX_TEXT_CHARS),
         fontFamily: rawLayer.fontFamily || "Inter, -apple-system, sans-serif",
         fontSize: rawLayer.fontSize || 48,
         fontWeight: rawLayer.fontWeight || 400,
@@ -217,6 +251,11 @@ export async function hydrateProject(data, options = {}) {
       continue;
     }
 
+    const rawShapes = rawLayer.shapes || [];
+    if (!Array.isArray(rawShapes)) throw new Error("Bad format: layer shapes must be an array");
+    if (rawShapes.length > MAX_SHAPES_PER_LAYER) {
+      throw new Error(`Bad format: more than ${MAX_SHAPES_PER_LAYER} shapes in a layer`);
+    }
     const layer = {
       id: rawLayer.id || uid(),
       name: rawLayer.name || "Vector",
@@ -228,9 +267,9 @@ export async function hydrateProject(data, options = {}) {
       effect: rawLayer.effect || null,
       maskEnabled: !!rawLayer.maskEnabled,
       clipToBelow: !!rawLayer.clipToBelow,
-      shapes: cloneShapes(rawLayer.shapes || []),
-      ox: rawLayer.ox || 0,
-      oy: rawLayer.oy || 0,
+      shapes: cloneShapes(rawShapes),
+      ox: toLayerOffset(rawLayer.ox),
+      oy: toLayerOffset(rawLayer.oy),
     };
     nextDoc.layers[layer.id] = layer;
     nextDoc.order.push(layer.id);
