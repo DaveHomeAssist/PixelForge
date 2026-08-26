@@ -57,7 +57,26 @@ jobs:
       pages: write
       id-token: write
 
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
+
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
+
+  health:
+    needs: deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Post-deploy health check
+        run: node scripts/check-deploy-health.mjs "${{ needs.deploy.outputs.page_url }}"

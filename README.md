@@ -44,7 +44,12 @@ Full local CI check (lint + test + build):
 npm run ci
 ```
 
-Deployment to GitHub Pages is handled by `.github/workflows/deploy-pages.yml` after CI succeeds on `main`, with a manual dispatch fallback.
+Browser visual smoke (builds, serves the preview, and drives headless Chrome across desktop, tablet, and phone viewports):
+```bash
+npm run smoke:visual
+```
+
+CI on `main` runs lint, tests, build, the bundle budget, and the browser visual smoke. Deployment to GitHub Pages is handled by `.github/workflows/deploy-pages.yml` after CI succeeds on `main`, with a manual dispatch fallback; a post-deploy health check then verifies the published page and its hashed script/stylesheet assets (`npm run check:deploy` runs the same check locally).
 
 ## Security notes
 

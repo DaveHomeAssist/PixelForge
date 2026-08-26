@@ -37,3 +37,14 @@ jobs:
 
       - name: Bundle budget
         run: npm run budget
+
+      - name: Browser visual smoke
+        run: npm run smoke:visual
+
+      - name: Upload visual smoke artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-smoke
+          path: artifacts/smoke-visual
+          if-no-files-found: ignore
