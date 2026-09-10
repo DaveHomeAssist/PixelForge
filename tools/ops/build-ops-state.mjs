@@ -8,6 +8,7 @@ import { readFileSync, writeFileSync, existsSync, statSync, readdirSync } from "
 import { join, dirname, resolve, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
+import { loadSchema, validateOpsState } from "./validate-ops-state.mjs";
 
 const PROJECT = { id: "pixel-forge", name: "PixelForge" };
 const SCHEMA_VERSION = 2;
@@ -235,6 +236,14 @@ const state = {
     staleAfterMinutes: STALE_AFTER_MINUTES,
   },
 };
+
+// ---- validate against the published contract before writing ----
+const schemaErrors = validateOpsState(state, loadSchema(join(ROOT, "ops-state.schema.json")));
+if (schemaErrors.length) {
+  console.error("[ops] refusing to write ops-state.json: output violates ops-state.schema.json");
+  for (const error of schemaErrors) console.error(`  - ${error}`);
+  process.exit(3);
+}
 
 // ---- write ----
 try {

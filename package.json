@@ -19,6 +19,8 @@
     "budget": "node scripts/check-bundle-size.mjs",
     "smoke:visual": "node scripts/run-visual-smoke.mjs",
     "check:deploy": "node scripts/check-deploy-health.mjs",
+    "ops:state": "node tools/ops/build-ops-state.mjs",
+    "ops:validate": "node tools/ops/validate-ops-state.mjs",
     "ci": "node scripts/verify-runtime.mjs && npm run lint && npm run test && npm run build && npm run budget"
   },
   "dependencies": {
