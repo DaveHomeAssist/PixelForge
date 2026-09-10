@@ -213,6 +213,7 @@
 .pf-quick-card strong, .pf-template-card strong, .pf-recent-file strong, .pf-preset-card strong { font-size: 14px; }
 .pf-quick-card small, .pf-template-card small, .pf-template-card em, .pf-recent-file small { color: var(--page-muted); font-size: 12px; font-style: normal; }
 .pf-recent-list { display: grid; gap: 8px; }
+.pf-recent-empty { margin: 0; padding: 14px 16px; border: 1px dashed var(--page-line-strong); border-radius: 10px; color: var(--page-muted); font-size: 13px; }
 .pf-recent-file { display: grid; grid-template-columns: auto minmax(0,1fr) auto auto; align-items: center; gap: 12px; padding: 11px 12px; text-align: left; }
 .pf-recent-file > span:nth-child(3), .pf-recent-file > span:nth-child(4) { display: inline-flex; align-items: center; gap: 6px; color: var(--page-muted); font-size: 12px; }
 .pf-file-thumb { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 7px; background: rgba(93,159,216,0.16); color: var(--page-blue); }

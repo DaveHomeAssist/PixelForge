@@ -49,7 +49,7 @@ Browser visual smoke (builds, serves the preview, and drives headless Chrome acr
 npm run smoke:visual
 ```
 
-CI on `main` runs lint, tests, build, the bundle budget, and the browser visual smoke. Deployment to GitHub Pages is handled by `.github/workflows/deploy-pages.yml` after CI succeeds on `main`, with a manual dispatch fallback; a post-deploy health check then verifies the published page and its hashed script/stylesheet assets (`npm run check:deploy` runs the same check locally).
+CI on `main` runs lint, tests, build, the bundle budget, and the browser visual smoke. Deployment to GitHub Pages is handled by `.github/workflows/deploy-pages.yml` after CI succeeds on `main`, with a manual dispatch fallback; a post-deploy health check then verifies the published page carries the build stamp for the deployed commit (`<meta name="pixelforge-build">`, injected at build time) and that its hashed script/stylesheet assets load (`npm run check:deploy` runs the same check locally; pass `--expect-build <sha>` to enforce the stamp).
 
 ## Security notes
 

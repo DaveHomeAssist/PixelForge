@@ -2,21 +2,38 @@
 //
 // Fetches the deployed page, confirms the app shell markup is present, then
 // fetches the hashed module script and stylesheet the page references so a
-// broken asset upload cannot pass. Retries to ride out Pages propagation.
+// broken asset upload cannot pass. When an expected build stamp is supplied
+// (PIXELFORGE_EXPECTED_BUILD or --expect-build), the page must carry that
+// stamp in its <meta name="pixelforge-build"> tag, so a stale or partial
+// deployment cannot pass just because some earlier build is still served.
+// Retries to ride out Pages propagation.
 //
-// Usage: node scripts/check-deploy-health.mjs [baseUrl]
+// Usage: node scripts/check-deploy-health.mjs [baseUrl] [--expect-build <sha>]
 //   baseUrl defaults to PIXELFORGE_DEPLOY_URL or the live GitHub Pages origin.
 
 import process from "node:process";
+import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 
-const baseUrl = normalizeBase(
-  process.argv[2] || process.env.PIXELFORGE_DEPLOY_URL || "https://davehomeassist.github.io/PixelForge/",
-);
-const maxAttempts = Number(process.env.PIXELFORGE_HEALTH_ATTEMPTS || 10);
-const retryDelayMs = Number(process.env.PIXELFORGE_HEALTH_RETRY_MS || 6000);
+export const BUILD_META_NAME = "pixelforge-build";
 
-function normalizeBase(url) {
+export function normalizeBase(url) {
   return url.endsWith("/") ? url : `${url}/`;
+}
+
+export function parseArgs(argv) {
+  const positional = [];
+  let expectedBuild = null;
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === "--expect-build") {
+      expectedBuild = argv[index + 1] || null;
+      index += 1;
+    } else {
+      positional.push(arg);
+    }
+  }
+  return { baseUrl: positional[0] || null, expectedBuild };
 }
 
 async function fetchOk(url, accept) {
@@ -31,7 +48,7 @@ async function fetchOk(url, accept) {
   return { body, contentType: response.headers.get("content-type") || "" };
 }
 
-function extractSameOriginAssets(html) {
+export function extractSameOriginAssets(html, baseUrl) {
   const assets = [];
   const patterns = [
     { kind: "script", regex: /<script[^>]*type="module"[^>]*src="([^"]+)"/g },
@@ -48,7 +65,13 @@ function extractSameOriginAssets(html) {
   return assets;
 }
 
-async function checkOnce() {
+export function extractBuildStamp(html) {
+  const match = html.match(/<meta\s+name="pixelforge-build"\s+content="([^"]*)"/i)
+    || html.match(/<meta\s+content="([^"]*)"\s+name="pixelforge-build"/i);
+  return match ? match[1] : null;
+}
+
+export async function checkOnce({ baseUrl, expectedBuild }) {
   const page = await fetchOk(baseUrl, "text/html");
   if (!page.contentType.includes("text/html")) {
     throw new Error(`Expected text/html from ${baseUrl}, got ${page.contentType}`);
@@ -61,7 +84,20 @@ async function checkOnce() {
   }
   console.log(`[health] PASS page | ${baseUrl}`);
 
-  const assets = extractSameOriginAssets(page.body);
+  const stamp = extractBuildStamp(page.body);
+  if (expectedBuild) {
+    if (!stamp) {
+      throw new Error(`Page at ${baseUrl} carries no ${BUILD_META_NAME} stamp; expected ${expectedBuild}`);
+    }
+    if (stamp !== expectedBuild) {
+      throw new Error(`Page at ${baseUrl} is build ${stamp}, expected ${expectedBuild}`);
+    }
+    console.log(`[health] PASS build | ${stamp}`);
+  } else {
+    console.log(`[health] INFO build | ${stamp || "unstamped"} (no expected build supplied, not enforced)`);
+  }
+
+  const assets = extractSameOriginAssets(page.body, baseUrl);
   const hasScript = assets.some(asset => asset.kind === "script");
   const hasStylesheet = assets.some(asset => asset.kind === "stylesheet");
   if (!hasScript || !hasStylesheet) {
@@ -81,10 +117,18 @@ async function checkOnce() {
 }
 
 async function main() {
+  const args = parseArgs(process.argv.slice(2));
+  const baseUrl = normalizeBase(
+    args.baseUrl || process.env.PIXELFORGE_DEPLOY_URL || "https://davehomeassist.github.io/PixelForge/",
+  );
+  const expectedBuild = (args.expectedBuild || process.env.PIXELFORGE_EXPECTED_BUILD || "").trim() || null;
+  const maxAttempts = Number(process.env.PIXELFORGE_HEALTH_ATTEMPTS || 10);
+  const retryDelayMs = Number(process.env.PIXELFORGE_HEALTH_RETRY_MS || 6000);
+
   let lastError;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
-      await checkOnce();
+      await checkOnce({ baseUrl, expectedBuild });
       console.log(`[health] Deployment healthy at ${baseUrl}`);
       return;
     } catch (error) {
@@ -98,7 +142,10 @@ async function main() {
   throw lastError;
 }
 
-main().catch(error => {
-  console.error("[health] Failed:", error.message);
-  process.exitCode = 1;
-});
+const invokedDirectly = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (invokedDirectly) {
+  main().catch(error => {
+    console.error("[health] Failed:", error.message);
+    process.exitCode = 1;
+  });
+}

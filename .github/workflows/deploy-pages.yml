@@ -40,6 +40,8 @@ jobs:
 
       - name: Build site
         run: npm run build
+        env:
+          PIXELFORGE_BUILD_SHA: ${{ github.sha }}
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5
@@ -80,3 +82,5 @@ jobs:
 
       - name: Post-deploy health check
         run: node scripts/check-deploy-health.mjs "${{ needs.deploy.outputs.page_url }}"
+        env:
+          PIXELFORGE_EXPECTED_BUILD: ${{ github.sha }}
