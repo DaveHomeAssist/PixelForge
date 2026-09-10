@@ -201,13 +201,14 @@ PixelForge can generate images from a text prompt directly into a new layer. You
 2. Click **Settings** (opens the AI Settings modal).
 3. Paste your **Anthropic API key** (used to refine the prompt).
 4. Paste your **Replicate API key** (used to render the image).
-5. Click **Save**. Keys are stored in this browser's local storage only.
+5. Paste the URL of a **CORS proxy** you run yourself that forwards requests to `api.replicate.com`. Replicate's API does not send CORS headers, so the browser cannot call it directly; without a proxy every generation fails at the request step.
+6. Click **Save**. Keys are stored in this tab's session storage only and are cleared when the tab closes.
 
 Get keys from:
 - **Anthropic:** https://console.anthropic.com/ → API Keys
 - **Replicate:** https://replicate.com/account/api-tokens
 
-Your keys never leave your browser, never enter `.pforge` save files, and never enter autosaved drafts.
+Your keys never enter `.pforge` save files or autosaved drafts. The Anthropic key goes only to `api.anthropic.com`. The Replicate key transits the CORS proxy you configured, so only use a proxy you control.
 
 ### Generating
 
@@ -343,7 +344,10 @@ Check that the active layer is **visible** (eye icon not crossed out) and has **
 The Brush works only on raster layers. Add one via **+ Raster** in the Layers section, or let PixelForge auto-switch by clicking the highlighted layer.
 
 **"AI Generate says 'Set your API keys'."**
-Open **✨ Generate → Settings** and paste both keys. Keys are stored in your browser's local storage.
+Open **✨ Generate → Settings** and paste both keys. Keys are stored in this tab's session storage, so a new tab or a restarted browser needs them again.
+
+**"AI generation says it could not reach Replicate."**
+Replicate blocks direct browser calls. Set the CORS proxy URL in AI Settings to a proxy you run that forwards to `api.replicate.com`.
 
 **"AI generation failed."**
 - Check your key validity on the provider dashboard
