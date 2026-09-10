@@ -22,13 +22,6 @@ const TEMPLATES = [
   { id: "emote", name: "Emote Pack", dim: "112 x 112", cat: "Stream", tag: "emotes", tone: "pink" },
 ];
 
-const RECENT_FILES = [
-  { id: "forest", name: "forest-parallax.pforge", dim: "1920 x 1080", edited: "12 min ago", size: "4.2 MB" },
-  { id: "sprite", name: "hero-sprite-v3.pforge", dim: "128 x 128", edited: "2 hours ago", size: "890 KB" },
-  { id: "menu", name: "menu-mockup.png", dim: "1440 x 1024", edited: "Yesterday", size: "2.1 MB" },
-  { id: "tiles", name: "tileset-dungeon.pforge", dim: "512 x 512", edited: "Yesterday", size: "3.6 MB" },
-];
-
 const PRESETS = [
   { id: "hd", name: "HD 1080p", w: 1920, h: 1080 },
   { id: "ig", name: "Instagram Post", w: 1080, h: 1080 },
@@ -102,7 +95,11 @@ function NewProjectModal({ draft, setDraft, close, create }) {
   );
 }
 
-export default function LauncherPage({ navigate, initialView = "home" }) {
+// PixelForge has no recent files store yet. The list stays empty until a real
+// source of truth exists; callers can pass one in, but nothing fabricates rows.
+const NO_RECENT_FILES = [];
+
+export default function LauncherPage({ navigate, initialView = "home", recentFiles = NO_RECENT_FILES }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [draft, setDraft] = useState({ preset: "hd", width: 1920, height: 1080, background: "white" });
   const isTemplates = initialView === "templates";
@@ -196,14 +193,16 @@ export default function LauncherPage({ navigate, initialView = "home" }) {
                 <button className="pf-page-btn ghost" type="button"><FolderOpen size={15} /> Browse</button>
               </div>
               <div className="pf-recent-list">
-                {RECENT_FILES.map(file => (
+                {recentFiles.length ? recentFiles.map(file => (
                   <button key={file.id} className="pf-recent-file" type="button" onClick={() => navigate(ROUTES.editor)}>
                     <span className="pf-file-thumb"><FileText size={16} /></span>
                     <span><strong>{file.name}</strong><small>{file.dim}</small></span>
                     <span><Clock3 size={13} /> {file.edited}</span>
                     <span>{file.size}</span>
                   </button>
-                ))}
+                )) : (
+                  <p className="pf-recent-empty">No recent files yet. PixelForge does not track opened projects; use Open Editor and load a .pforge file from the File menu.</p>
+                )}
               </div>
             </section>
           </>
