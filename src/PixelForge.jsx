@@ -42,6 +42,7 @@ import {
   cloneShape, mergePrefs, getToolRequirement, isToolCompatibleWithLayer, normalizePanelTab,
 } from "./utils.js";
 import { renderEditor } from "./render.js";
+import { consumeLaunchIntent } from "./launchIntent.js";
 import { commitFloat } from "./marquee.js";
 import { cropToRect, trimTransparent, rotateCanvas, flipCanvas } from "./canvasOps.js";
 import { hitShape } from "./shapes.js";
@@ -715,8 +716,18 @@ export default function PixelForge() {
 
   /* ─── Init ─── */
   useEffect(() => {
-    resetDocument();
-  }, [resetDocument]);
+    const intent = consumeLaunchIntent();
+    if (!intent) {
+      resetDocument();
+      return;
+    }
+    resetDocument(intent.width, intent.height, intent.background || DEFAULT_BG);
+    if (!intent.backgroundSupported) {
+      requestAnimationFrame(() => {
+        flash(`Background "${intent.requestedBackground}" is not supported yet. Opened with a white background.`, "info", 3200);
+      });
+    }
+  }, [flash, resetDocument]);
 
   /* ─── Render ─── */
   const renderFrame = useEffectEvent(() => {

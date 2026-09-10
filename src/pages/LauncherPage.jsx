@@ -4,6 +4,7 @@ import {
   Palette, Play, Plus, Search, Upload,
 } from "lucide-react";
 import { ROUTES, routeHref } from "../routes.js";
+import { writeLaunchIntent } from "../launchIntent.js";
 
 const QUICK = [
   { id: "sq", name: "Square", size: "2048 x 2048", ratio: "1:1" },
@@ -106,11 +107,7 @@ export default function LauncherPage({ navigate, initialView = "home" }) {
   const [draft, setDraft] = useState({ preset: "hd", width: 1920, height: 1080, background: "white" });
   const isTemplates = initialView === "templates";
   const createProject = () => {
-    try {
-      window.sessionStorage.setItem("PixelForge.launchDraft.v1", JSON.stringify(draft));
-    } catch {
-      // Non-critical; the editor remains available even if storage is disabled.
-    }
+    writeLaunchIntent(draft);
     navigate(ROUTES.editor);
   };
 
@@ -218,7 +215,11 @@ export default function LauncherPage({ navigate, initialView = "home" }) {
             </div>
             <div className="pf-template-grid">
               {TEMPLATES.map(template => (
-                <button key={template.id} className="pf-template-card" type="button" onClick={() => setModalOpen(true)}>
+                <button key={template.id} className="pf-template-card" type="button" onClick={() => {
+                  const [width, height] = template.dim.split(" x ").map(Number);
+                  setDraft({ preset: template.id, width, height, background: "white" });
+                  setModalOpen(true);
+                }}>
                   <span className={`pf-template-preview ${template.tone}`}><Palette size={22} /></span>
                   <span className="pf-template-copy">
                     <small>{template.cat} / {template.tag}</small>
