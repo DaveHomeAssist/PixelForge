@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import Anthropic from "@anthropic-ai/sdk";
 import { getApiConfig, setApiConfig, clearApiConfig, hasAnthropicKey, hasProviderKey } from "../ai/storage.js";
 import { refinePrompt } from "../ai/claude.js";
 
@@ -53,6 +54,29 @@ describe("ai/storage", () => {
 });
 
 describe("ai/claude.refinePrompt", () => {
+  it("uses the installed SDK to serialize and parse the tool exchange without network access", async () => {
+    const transport = vi.fn(async (_url, options) => {
+      const body = JSON.parse(options.body);
+      expect(body.model).toBe("claude-sonnet-4-6");
+      expect(body.tool_choice).toEqual({ type: "tool", name: "refined_prompt" });
+      expect(body.messages).toEqual([{ role: "user", content: "a fixture dragon" }]);
+      return new Response(JSON.stringify({
+        id: "fixture-message", type: "message", role: "assistant",
+        content: [{ type: "tool_use", id: "fixture-tool", name: "refined_prompt",
+          input: { prompt: "fixture dragon", negative_prompt: "blur", suggested_aspect_ratio: "3:2" } }],
+        stop_reason: "tool_use", usage: { input_tokens: 1, output_tokens: 1 },
+      }), { headers: { "content-type": "application/json" } });
+    });
+    class FixtureAnthropic extends Anthropic {
+      constructor(options) {
+        super({ ...options, fetch: transport, maxRetries: 0 });
+      }
+    }
+    const result = await refinePrompt("a fixture dragon", "fixture-key", { sdk: { Anthropic: FixtureAnthropic } });
+    expect(result).toEqual({ prompt: "fixture dragon", negativePrompt: "blur", aspect: "3:2" });
+    expect(transport).toHaveBeenCalledTimes(1);
+  });
+
   it("throws when the API key is missing", async () => {
     await expect(refinePrompt("dragon", "", { sdk: {} })).rejects.toThrow(/Anthropic API key/);
   });
