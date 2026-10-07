@@ -3,19 +3,38 @@
     "id": "pixel-forge",
     "name": "PixelForge"
   },
-  "status": "unknown",
-  "freshness": "unknown",
-  "updatedAt": "2026-04-24T19:36:25.245Z",
-  "summary": "no version · branch main",
-  "recommendations": [],
+  "status": "warn",
+  "freshness": "stale",
+  "updatedAt": "2026-10-07T13:05:03.607Z",
+  "summary": "v1.0.0 · branch codex/dependency-maintenance-20261007 · dirty tree · 1 open issue",
+  "recommendations": [
+    {
+      "priority": "P2",
+      "title": "Refresh project activity",
+      "reason": "Latest commit activity is outside the freshness window.",
+      "command": null
+    },
+    {
+      "priority": "P2",
+      "title": "Resolve working tree drift",
+      "reason": "Uncommitted changes make dashboard status harder to trust.",
+      "command": "git status --short"
+    },
+    {
+      "priority": "P3",
+      "title": "Review branch state",
+      "reason": "Current branch is codex/dependency-maintenance-20261007, not main.",
+      "command": null
+    }
+  ],
   "sections": [
     {
       "title": "Build",
       "items": [
         {
           "label": "Version",
-          "value": "unknown",
-          "status": "unknown"
+          "value": "1.0.0",
+          "status": "ok"
         },
         {
           "label": "Dist built",
@@ -34,13 +53,13 @@
       "items": [
         {
           "label": "Branch",
-          "value": "main",
-          "status": "ok"
+          "value": "codex/dependency-maintenance-20261007",
+          "status": "warn"
         },
         {
           "label": "Working tree",
-          "value": "unknown",
-          "status": "unknown"
+          "value": "dirty",
+          "status": "warn"
         }
       ]
     },
@@ -63,18 +82,18 @@
   "kpis": [
     {
       "label": "Version",
-      "value": "unknown",
-      "status": "unknown"
-    },
-    {
-      "label": "Branch",
-      "value": "main",
+      "value": "1.0.0",
       "status": "ok"
     },
     {
+      "label": "Branch",
+      "value": "codex/dependency-maintenance-20261007",
+      "status": "warn"
+    },
+    {
       "label": "Working tree",
-      "value": "unknown",
-      "status": "unknown"
+      "value": "dirty",
+      "status": "warn"
     },
     {
       "label": "Dist built",
@@ -97,7 +116,15 @@
       "status": "ok"
     }
   ],
-  "issues": [],
+  "issues": [
+    {
+      "id": "git-dirty",
+      "severity": "P3",
+      "status": "open",
+      "title": "Working tree has uncommitted changes",
+      "source": ".git"
+    }
+  ],
   "links": [
     {
       "label": "README",
@@ -116,8 +143,8 @@
     "generator": "tools/ops/build-ops-state.mjs",
     "schemaVersion": 2,
     "root": ".",
-    "lastCommitAt": null,
-    "lastCommitAgeMinutes": null,
+    "lastCommitAt": "2026-10-01T01:36:17-04:00",
+    "lastCommitAgeMinutes": 9089,
     "staleAfterMinutes": 1440
   }
 }
