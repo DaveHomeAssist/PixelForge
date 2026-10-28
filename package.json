@@ -40,7 +40,7 @@
     "@testing-library/dom": "^10.4.2",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
-    "@testing-library/user-event": "^14.6.7",
+    "@testing-library/user-event": "^14.6.8",
     "@vitejs/plugin-react": "^6.1.1",
     "es-iterator-helpers": "1.4.0",
     "esbuild": "^0.28.0",
